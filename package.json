@@ -1,0 +1,25 @@
+{
+  "name": "centraliza-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["server", "client"],
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "concurrently --kill-others -n api,web \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "build": "npm run build --workspace client",
+    "start": "npm start --workspace server",
+    "db:migrate": "npm run db:migrate --workspace server",
+    "db:seed": "npm run db:seed --workspace server",
+    "db:bootstrap": "npm run db:bootstrap --workspace server",
+    "test": "npm test --workspace server",
+    "test:e2e": "playwright test",
+    "local:up": "node scripts/local-up.mjs",
+    "local:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,42 @@
+name: Validar aplicación
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: centraliza
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_ephemeral_database_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d centraliza"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      DATABASE_ADMIN_URL: postgresql://postgres:ci_ephemeral_database_only@127.0.0.1:5432/centraliza
+      DATABASE_URL: postgresql://dashboard_app:ci_ephemeral_runtime_only@127.0.0.1:5432/centraliza
+      DEMO_MODE: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run setup
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
