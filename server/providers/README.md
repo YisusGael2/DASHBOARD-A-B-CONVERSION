@@ -1,5 +1,7 @@
 # Adaptadores del servidor
 
+Referencia completa: [funciones, conexiones y métricas](../../docs/integraciones.md). El catálogo documenta cada helper y el ciclo de persistencia; el [contrato HTTP](../../docs/api.md) especifica las llamadas de la interfaz.
+
 `syncProvider(provider, { store, integration, credentials, days })` recibe
 credenciales descifradas exclusivamente en el backend y devuelve datos para una
 transacción de persistencia. Un fallo nunca devuelve resultados parciales.
@@ -45,7 +47,9 @@ población. Las devoluciones de pedidos antiguos solo actualizan su cohorte
 cuando se vuelve a sincronizar su fecha de creación. Confirma esta definición
 contra la documentación oficial antes de utilizarla para decisiones financieras.
 
-Se sincronizan 14 días por defecto, máximo 31, hasta 5.000 pedidos y 60 segundos.
+El adaptador usa 14 días por defecto cuando su caller no proporciona período.
+El endpoint de esta aplicación solicita 28 días para comparar dos ventanas de 14.
+El máximo interno es 31, hasta 5.000 pedidos y 60 segundos.
 Si se excede el límite, reduce el período. Fechas vacías se devuelven como cero
 para reemplazar la caché del período. No se suman monedas distintas. Sesiones
 y conversión permanecen `null` porque pedidos no ofrecen el denominador.

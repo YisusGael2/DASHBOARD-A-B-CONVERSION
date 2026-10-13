@@ -2,6 +2,10 @@
 
 Dashboard para **una sola agencia e-commerce** y sus clientes Shopify. Centraliza ventas, pruebas A/B y comportamiento con usuarios Super Admin, Admin y Cliente. Cada tienda es un tenant en PostgreSQL.
 
+## Documentación completa
+
+Consulta el [índice de documentación](docs/README.md) para arquitectura, funciones, componentes, API, esquema SQL, integraciones, seguridad, operación y el inventario de callbacks. Para empezar en tu equipo, sigue la [guía de pruebas locales](docs/pruebas-locales.md), con el recorrido por roles y las 28 pruebas automáticas.
+
 ## Abrir en local
 
 Necesitas **Node.js 24 LTS** (mínimo 22.12), **Docker Desktop** con Docker Compose y Git. Inicia Docker Desktop antes de ejecutar los comandos. También puedes descargar el ZIP desde el botón **Code → Download ZIP** de GitHub y abrir una terminal en la carpeta descomprimida.
@@ -71,10 +75,10 @@ La interfaz de desarrollo usa el puerto `5173` y hace proxy de `/api` al backend
 
 ```bash
 npm run build
-npm start
+NODE_ENV=production npm start
 ```
 
-El backend sirve la interfaz compilada y la API en el puerto `3001`.
+El backend sirve la interfaz compilada y la API en el puerto `3001` cuando `NODE_ENV=production`. En PowerShell usa `$env:NODE_ENV = "production"` y después `npm start`; consulta [Operación](docs/operacion.md). Sin ese modo, `npm start` sirve la API y la interfaz de desarrollo se abre por Vite.
 
 ## Pruebas
 

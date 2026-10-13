@@ -1,5 +1,7 @@
 # PostgreSQL contract
 
+Documentación completa en español: [diccionario de todas las columnas, relaciones, funciones, índices y RLS](../docs/base-de-datos.md). La [arquitectura](../docs/arquitectura.md) conecta este esquema con el backend y la interfaz.
+
 `schema.sql` installs a database shared by one agency. Every store is a tenant.
 Clients have exactly one store; agency admins and the super admin have none.
 UUID generation uses PostgreSQL's built-in `gen_random_uuid()` (PostgreSQL 13+).
