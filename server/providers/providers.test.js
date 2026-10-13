@@ -2,6 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { syncProvider } from './index.js';
 
+function environment(t, key, value) {
+  const previous = process.env[key];
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+  t.after(() => {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  });
+}
+
+test.beforeEach((t) => { environment(t, 'MOCK_PROVIDERS', undefined); });
+
 function stubFetch(t, fn) {
   const previous = globalThis.fetch;
   globalThis.fetch = fn;
@@ -168,7 +180,185 @@ test('Clarity rejects an unexpected response instead of manufacturing metrics', 
   }), (error) => error.code === 'INVALID_RESPONSE');
 });
 
-test('Intelligems clearly reports pending implementation and unknown providers are rejected', async () => {
-  await assert.rejects(syncProvider('intelligems', {}), (error) => error.status === 501 && error.code === 'INTELLIGEMS_NOT_IMPLEMENTED');
+const intelligemsOptions = {
+  store: { domain: 'example.myshopify.com', currency: 'MXN', timezone: 'Pacific/Kiritimati' },
+  integration: { external_id: 'test-account' }, credentials: { apiKey: 'test-only-intelligems-key' }, days: 28,
+};
+
+function experience(extras = {}) {
+  return {
+    id: ' experiment-one ', name: ' Precio del producto ', status: 'active',
+    started_at: '2026-01-01T10:00:00Z', confidence: '96.7',
+    variants: [
+      { id: ' control ', name: ' Precio actual ', is_control: true, visitors: '1200', orders: '36', revenue: '10123.40' },
+      { externalId: 'variant-b', name: 'Precio nuevo', visitors: 1100, conversions: 44, revenue: '12567.89' },
+    ], ...extras,
+  };
+}
+
+test('Intelligems fetches the fixed endpoint and normalizes experiments and exact amounts', async (t) => {
+  stubFetch(t, async (url, options) => {
+    assert.equal(url, 'https://api.intelligems.io/v1/experiences');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.headers['x-api-key'], 'test-only-intelligems-key');
+    assert.equal(options.headers.Accept, 'application/json');
+    assert.ok(options.signal instanceof AbortSignal);
+    return response({ experiences: [experience()] });
+  });
+  const result = await syncProvider('intelligems', intelligemsOptions);
+  assert.equal(result.mock, undefined);
+  assert.equal(result.experiments.length, 1);
+  const experiment = result.experiments[0];
+  assert.equal(experiment.externalId, 'experiment-one');
+  assert.equal(experiment.name, 'Precio del producto');
+  assert.equal(experiment.startedAt, '2026-01-01T10:00:00Z');
+  assert.equal(experiment.endedAt, null);
+  assert.equal(experiment.confidence, 96.7);
+  const control = experiment.variants[0];
+  assert.equal(control.externalId, 'control');
+  assert.equal(control.isControl, true);
+  assert.equal(control.visitors, 1200);
+  assert.equal(control.orders, 36);
+  assert.equal(control.revenue, '10123.4');
+  assert.equal(control.currency, 'MXN');
+  assert.equal(control.date, new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Pacific/Kiritimati', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()));
+  assert.equal(experiment.variants[1].orders, 44);
+});
+
+test('Intelligems supports experiments and externalId aliases with defined fallback values', async (t) => {
+  stubFetch(t, async () => response({ experiments: [{
+    externalId: 'alias', status: 'unknown', confidence: 101,
+    variants: [{ externalId: 'variant', visitors: -1, orders: 1.5 }],
+  }] }));
+  const result = await syncProvider('intelligems', { credentials: { apiKey: 'valid-key' } });
+  const experiment = result.experiments[0];
+  assert.equal(experiment.externalId, 'alias');
+  assert.equal(experiment.name, 'Experimento');
+  assert.equal(experiment.status, 'active');
+  assert.equal(experiment.confidence, null);
+  assert.equal(experiment.startedAt, null);
+  assert.deepEqual(experiment.variants[0], {
+    externalId: 'variant', name: 'Variante', isControl: false,
+    date: new Date().toISOString().slice(0, 10), visitors: 0, orders: 0, revenue: '0.00', currency: 'USD',
+  });
+});
+
+test('Intelligems rejects malformed payloads, missing variants, duplicated identifiers and controls', async (t) => {
+  let payload;
+  stubFetch(t, async () => response(payload));
+  for (payload of [
+    {}, null, [], { experiences: {} }, { experiments: 'invalid' },
+    { experiences: [null] },
+    { experiences: [experience({ id: undefined })] },
+    { experiences: [experience({ id: ' ' })] },
+    { experiences: [experience({ variants: [] })] },
+    { experiences: [experience({ variants: [null] })] },
+    { experiences: [experience({ variants: [{ id: ' ' }] })] },
+    { experiences: [experience({ variants: [{ id: 'same' }, { id: 'same' }] })] },
+    { experiences: [experience(), experience()] },
+    { experiences: [experience({ variants: [{ id: 'one', isControl: true }, { id: 'two', is_control: true }] })] },
+    { experiences: [experience({ startedAt: 'not-a-date' })] },
+    { experiences: [experience({ startedAt: '2026-02-31T10:00:00Z' })] },
+    { experiences: [experience({ ended_at: '2025-12-31T00:00:00Z' })] },
+  ]) {
+    await assert.rejects(syncProvider('intelligems', intelligemsOptions), (error) => {
+      assert.equal(error.status, 502);
+      assert.equal(error.code, 'INVALID_RESPONSE');
+      assert.equal(error.message, 'Intelligems devolvió un formato no compatible.');
+      return true;
+    });
+  }
+});
+
+test('Intelligems rejects unsupported monetary values without forwarding the response', async (t) => {
+  stubFetch(t, async () => response({ experiences: [experience({ variants: [{ id: 'one', revenue: 'credential-in-malformed-money' }] })] }));
+  await assert.rejects(syncProvider('intelligems', intelligemsOptions), (error) => {
+    assert.equal(error.code, 'INVALID_MONEY');
+    assert.ok(!error.message.includes('credential-in-malformed-money'));
+    return true;
+  });
+});
+
+test('Shopify Sandbox generates deterministic local calendar days and respects the store currency', async (t) => {
+  stubFetch(t, async () => { assert.fail('Sandbox must never call fetch'); });
+  const options = { ...shopifyOptions, store: { ...shopifyOptions.store, currency: 'MXN', timezone: 'Pacific/Kiritimati' }, credentials: { accessToken: 'mock_shpat_test' }, days: undefined };
+  const result = await syncProvider('shopify', options);
+  assert.equal(result.mock, true);
+  assert.equal(result.daily.length, 28);
+  assert.deepEqual(result, await syncProvider('shopify', options));
+  const shorter = await syncProvider('shopify', { ...options, days: 7 });
+  assert.deepEqual(shorter.daily, result.daily.slice(-7));
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: options.store.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  assert.equal(result.daily.at(-1).date, today);
+  for (const [index, row] of result.daily.entries()) {
+    assert.equal(row.currency, 'MXN');
+    assert.ok(Number.isInteger(row.orders) && row.orders > 0);
+    assert.ok(Number(row.revenue) > 0);
+    assert.equal(row.sessions, null);
+    assert.equal(row.conversionRate, null);
+    if (index) assert.equal(Date.parse(`${row.date}T12:00:00Z`) - Date.parse(`${result.daily[index - 1].date}T12:00:00Z`), 86_400_000);
+  }
+});
+
+test('Clarity Sandbox keeps an explicit period snapshot and all behavior metrics', async (t) => {
+  stubFetch(t, async () => { assert.fail('Sandbox must never call fetch'); });
+  const options = { store: { domain: 'test.myshopify.com', timezone: 'UTC' }, integration: { external_id: 'sandbox-project' }, credentials: { apiKey: 'sandbox_clarity_test' }, days: 14 };
+  const result = await syncProvider('clarity', options);
+  assert.equal(result.mock, true);
+  assert.deepEqual(result, await syncProvider('clarity', options));
+  const snapshot = result.clarity[0];
+  assert.ok(snapshot.sessions > 0 && snapshot.deadClicks > 0 && snapshot.rageClicks > 0 && snapshot.quickBacks > 0);
+  assert.equal(snapshot.scrollDepth, 68.5);
+  assert.deepEqual(snapshot.metadata, {
+    aggregation: 'period_snapshot', windowDays: 3, snapshotDate: snapshot.date, projectId: 'sandbox-project', mock: true,
+  });
+});
+
+test('Intelligems Sandbox returns two reproducible experiments without a network request', async (t) => {
+  stubFetch(t, async () => { assert.fail('Sandbox must never call fetch'); });
+  const options = { ...intelligemsOptions, credentials: { apiKey: 'mock_ig_test' } };
+  const result = await syncProvider('intelligems', options);
+  assert.equal(result.mock, true);
+  assert.deepEqual(result, await syncProvider('intelligems', options));
+  assert.deepEqual(result.experiments.map((experiment) => experiment.status), ['active', 'completed']);
+  for (const experiment of result.experiments) {
+    assert.equal(experiment.variants.length, 2);
+    assert.equal(experiment.variants.filter((variant) => variant.isControl).length, 1);
+    assert.deepEqual(experiment.variants.map((variant) => variant.name), ['Control', 'Variante B']);
+    assert.ok(experiment.variants.every((variant) => variant.currency === 'MXN' && variant.visitors > variant.orders && variant.orders > 0 && Number(variant.revenue) > 0));
+  }
+});
+
+test('Sandbox still rejects invalid domains, blank tokens, windows, currencies and timezones before fetch', async (t) => {
+  stubFetch(t, async () => { assert.fail('Validation must happen before fetch'); });
+  await assert.rejects(syncProvider('shopify', { ...shopifyOptions, store: { domain: 'localhost' }, credentials: { accessToken: 'mock_shopify_test' } }), (error) => error.code === 'INVALID_SHOPIFY_DOMAIN');
+  for (const provider of ['shopify', 'clarity', 'intelligems']) {
+    const store = { domain: 'test.myshopify.com', currency: 'USD', timezone: 'UTC' };
+    const key = provider === 'shopify' ? 'accessToken' : 'apiKey';
+    await assert.rejects(syncProvider(provider, { store, credentials: { [key]: '   ' } }), (error) => error.code === 'MISSING_CREDENTIAL');
+    for (const days of [0, 32, 1.5, 'invalid']) {
+      await assert.rejects(syncProvider(provider, { store, credentials: { [key]: 'mock_validation_test' }, days }), (error) => error.code === 'INVALID_PERIOD');
+    }
+    await assert.rejects(syncProvider(provider, { store: { ...store, timezone: 'Invalid/Timezone' }, credentials: { [key]: 'mock_validation_test' } }), (error) => error.code === 'INVALID_TIMEZONE');
+    if (provider !== 'clarity') await assert.rejects(syncProvider(provider, { store: { ...store, currency: 'bad' }, credentials: { [key]: 'mock_validation_test' } }), (error) => error.code === 'MISSING_CURRENCY');
+  }
+});
+
+test('MOCK_PROVIDERS=true enables Sandbox for valid normal tokens but cannot bypass credential validation', async (t) => {
+  // The beforeEach hook restores the original environment after this case.
+  process.env.MOCK_PROVIDERS = 'true';
+  stubFetch(t, async () => { assert.fail('Global Sandbox must never call fetch'); });
+  for (const provider of ['shopify', 'clarity', 'intelligems']) {
+    const key = provider === 'shopify' ? 'accessToken' : 'apiKey';
+    const options = { store: { domain: 'test.myshopify.com', currency: 'USD' }, credentials: { [key]: 'normal-valid-token' } };
+    assert.equal((await syncProvider(provider, options)).mock, true);
+    await assert.rejects(syncProvider(provider, { ...options, credentials: { [key]: '' } }), (error) => error.code === 'MISSING_CREDENTIAL');
+  }
+});
+
+test('Unknown providers remain rejected', async () => {
   await assert.rejects(syncProvider('https://evil.test', {}), (error) => error.status === 400 && error.code === 'UNKNOWN_PROVIDER');
 });

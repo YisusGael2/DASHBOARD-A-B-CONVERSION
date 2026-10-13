@@ -15,8 +15,8 @@ Todos los comandos se ejecutan en la raíz `DASHBOARD-A-B-CONVERSION`, salvo ind
 | `npm run db:migrate` | server/scripts/migrate.js | Instala rol, esquema y políticas |
 | `npm run db:seed` | server/scripts/seed.js | Demo si habilitada; de otro modo termina sin crear muestras |
 | `npm run db:bootstrap` | server/scripts/bootstrap.js | Primer Super Admin sin demo |
-| `npm test` | node --test test/*.test.js providers/*.test.js en server | 10 casos de integración y 12 de adaptadores |
-| `npm run test:e2e` | playwright test | 8 flujos de navegador |
+| `npm test` | node --test test/*.test.js providers/*.test.js en server | Integración, analítica, DTOs y adaptadores |
+| `npm run test:e2e` | playwright test | Flujos de navegador y descargas |
 
 En el workspace cliente existen además `dev`, `build` y `preview`; preview sirve únicamente el compilado y no configura el proxy API de desarrollo. No es el comando principal para probar el producto completo. Los comandos del workspace servidor son dev/start/db:migrate/db:seed/db:bootstrap/test.
 
@@ -37,6 +37,7 @@ No hay valores reales en esta referencia. Los ejemplos de `.env.example` son pla
 | `JWT_SECRET` | config, auth, pruebas | Firma JWT; setup genera 48 bytes en hex; mínimo válido 32 bytes de texto |
 | `CREDENTIAL_ENCRYPTION_KEY` | config, security, Compose | Clave AES de 32 bytes, hex de 64 caracteres o base64; setup genera hex |
 | `SHOPIFY_API_VERSION` | adaptador, app Compose | Versión YYYY-MM, default 2026-07; formato no acredita disponibilidad externa |
+| `MOCK_PROVIDERS` | adaptadores y app Compose | Solo true activa Sandbox global; por defecto false. Prefijos mock_/sandbox_ permiten simulación por credencial sin cambiar esta variable |
 | `ADMIN_EMAIL` | bootstrap y su contenedor | Correo del primer Super Admin sin demo |
 | `ADMIN_NAME` | bootstrap y su contenedor | Nombre de esa cuenta |
 | `ADMIN_PASSWORD` | bootstrap y su contenedor | Contraseña inicial de mínimo 12 caracteres; retirar después |
@@ -103,7 +104,7 @@ La imagen usa node:24-bookworm-slim; copia primero manifiestos/lock para reutili
 | --- | --- | --- | --- |
 | db | PostgreSQL 17, usuario postgres, volumen postgres_data | Ninguna | running/healthy |
 | bootstrap | URLs administrativa/limitada; claves; ADMIN_* opcionales | db healthy | exited 0 tras migrate/seed |
-| app | Solo URL limitada, JWT/AES, demo, versión Shopify | bootstrap completed successfully | running/healthy |
+| app | Solo URL limitada, JWT/AES, demo, versión Shopify y flag mock | bootstrap completed successfully | running/healthy |
 
 La comprobación db es pg_isready cada 3s, timeout3s, 20 intentos. La de app hace fetch a /api/health interno cada 10s, timeout3s, 10 intentos. Healthcheck no cubre OAuth, proveedores ni todos los endpoints.
 
@@ -151,6 +152,8 @@ La existencia del workflow no demuestra que un run remoto haya pasado. Consulta 
 
 `local:down` conserva volumen. `local:up` puede volver a sembrar filas demo, pero conserva usuarios existentes y conexiones reales. No regeneres .env al conservar la DB: password de postgres persistido, URL runtime, clave AES y JWT deben corresponder.
 
+Para actualizar un checkout existente ejecuta `git pull origin main` y `npm run local:up`, después recarga la página. No requiere eliminar volumen ni regenerar .env. Cambiar MOCK_PROVIDERS en .env requiere recrear el app con local:up; en Node local requiere reiniciar el servidor. El valor no se incluye automáticamente en .env creado por setup: puedes añadirlo si deseas el modo global; los prefijos mock_ funcionan sin él.
+
 Para backup local multiplataforma, sin redirección binaria de PowerShell:
 
 ```bash
@@ -177,7 +180,8 @@ Restaura con pg_restore en **una base de destino vacía y separada**, prepara da
 | fuentes no cargan | Google Fonts es opcional; sans-serif mantiene interfaz funcional |
 | Playwright no tiene navegador | npx playwright install chromium, o configura navegador instalado |
 | muestras desaparecen al guardar credencial | Es el cambio a fuente live de toda la tienda, documentado; otra tienda demo permanece intacta |
-| Intelligems 501 | Funcionalidad real pendiente, no es un problema de contraseña |
+| Intelligems INVALID_RESPONSE/error 502 | Payload externo no compatible con el contrato solicitado; revisa permisos/contrato de la cuenta. Sandbox permite comprobar importación sin esa conexión |
+| Sandbox no aparece | Usa token no vacío con prefijo mock_/sandbox_ y sincroniza; o configura MOCK_PROVIDERS=true y recrea/reinicia app |
 | Docker build TLS/proxy | Usa el proxy/CA legítimos del entorno; local-up preserva verificación TLS y resolución de proxy |
 
 `docker compose down -v` elimina el volumen y sus datos. No forma parte de la instalación normal, diagnóstico ni actualización recomendada.

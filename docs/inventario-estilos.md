@@ -1,6 +1,6 @@
 # Inventario completo de estilos
 
-Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra una regla propia y sus declaraciones exactas. Reglas repetidas en distintas condiciones son overrides de cascade, no duplicados de funcionalidad. Los componentes y la finalidad de cada grupo visual se explican en [Frontend](frontend.md).
+Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra una regla y sus declaraciones exactas. Los contextos describen condiciones responsive y animaciones; las reglas repetidas son overrides de cascade. Los componentes y grupos visuales se explican en [Frontend](frontend.md).
 
 ## Reglas externas, responsive y animaciones
 
@@ -15,6 +15,7 @@ Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra un
 | <code>@media</code> | <code>(max-width:380px)</code> | [L23](../client/src/styles.css#L23) |
 | <code>@media</code> | <code>(prefers-reduced-motion:reduce)</code> | [L25](../client/src/styles.css#L25) |
 | <code>@media</code> | <code>(max-width:720px)</code> | [L39](../client/src/styles.css#L39) |
+| <code>@media</code> | <code>(max-width:720px)</code> | [L79](../client/src/styles.css#L79) |
 
 ## Selectores y declaraciones
 
@@ -503,5 +504,53 @@ Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra un
 | [<code>.topbar-avatar</code>](../client/src/styles.css#L39) | <code>@media (max-width:720px)</code> | <code>display: none</code> |
 | [<code>.session-button</code>](../client/src/styles.css#L39) | <code>@media (max-width:720px)</code> | <code>padding: 8px; font-size: 10px; gap: 6px</code> |
 | [<code>.breadcrumb</code>](../client/src/styles.css#L39) | <code>@media (max-width:720px)</code> | <code>min-width: 0; overflow: hidden; white-space: nowrap</code> |
+| [<code>.overview-toolbar</code>](../client/src/styles.css#L42) | <code>General</code> | <code>flex-wrap: wrap</code> |
+| [<code>.overview-period</code>](../client/src/styles.css#L43) | <code>General</code> | <code>display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap</code> |
+| [<code>.period-selector</code>](../client/src/styles.css#L44) | <code>General</code> | <code>flex-shrink: 0</code> |
+| [<code>.period-selector button</code>](../client/src/styles.css#L45) | <code>General</code> | <code>min-width: 38px; padding: 7px 9px</code> |
+| [<code>.panel-actions,.section-actions</code>](../client/src/styles.css#L46) | <code>General</code> | <code>display: flex; align-items: center; justify-content: flex-end; gap: 13px; flex-wrap: wrap</code> |
+| [<code>.section-actions&gt;.muted</code>](../client/src/styles.css#L47) | <code>General</code> | <code>font-size: 11px</code> |
+| [<code>.export-button</code>](../client/src/styles.css#L48) | <code>General</code> | <code>font-size: 10px; padding: 8px 11px; min-height: 32px</code> |
+| [<code>.pill.sandbox</code>](../client/src/styles.css#L49) | <code>General</code> | <code>background: #f1edf9; color: #775e9c; letter-spacing: .3px</code> |
+| [<code>.sandbox-banner</code>](../client/src/styles.css#L50) | <code>General</code> | <code>display: flex; align-items: center; gap: 9px; padding: 10px 13px; margin-bottom: 28px; border: 1px solid #e4d9f0; border-radius: 6px; background: #f8f4fc; color: #7d6994; font-size: 10px; line-height: 1.7</code> |
+| [<code>.sandbox-banner&gt;.pill</code>](../client/src/styles.css#L51) | <code>General</code> | <code>font-size: 8px; padding: 3px 7px</code> |
+| [<code>.sandbox-banner&gt;svg</code>](../client/src/styles.css#L52) | <code>General</code> | <code>margin-left: auto</code> |
+| [<code>.sandbox-help</code>](../client/src/styles.css#L53) | <code>General</code> | <code>padding: 13px; margin-bottom: 20px; border: 1px solid #e8e0ef; border-radius: 8px; background: #faf7fd</code> |
+| [<code>.sandbox-help&gt;.button</code>](../client/src/styles.css#L54) | <code>General</code> | <code>width: 100%; font-size: 10px; min-height: 35px</code> |
+| [<code>.sandbox-help&gt;p</code>](../client/src/styles.css#L55) | <code>General</code> | <code>margin-top: 9px; font-size: 9px; color: #8d7d9e; line-height: 1.8</code> |
+| [<code>.integration-top</code>](../client/src/styles.css#L56) | <code>General</code> | <code>gap: 9px; flex-wrap: wrap</code> |
+| [<code>.variant-label</code>](../client/src/styles.css#L59) | <code>General</code> | <code>gap: 9px; align-items: flex-start</code> |
+| [<code>.variant-label&gt;span</code>](../client/src/styles.css#L60) | <code>General</code> | <code>min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere</code> |
+| [<code>.variant-rate</code>](../client/src/styles.css#L61) | <code>General</code> | <code>display: flex; align-items: flex-end; flex-direction: column; gap: 5px; flex-shrink: 0</code> |
+| [<code>.variant-rate&gt;strong</code>](../client/src/styles.css#L62) | <code>General</code> | <code>font-size: 10px; font-weight: 550; color: #6a8959</code> |
+| [<code>.experiment-detailed .variant-rate&gt;strong</code>](../client/src/styles.css#L63) | <code>General</code> | <code>font-size: 12px</code> |
+| [<code>.variant-lift</code>](../client/src/styles.css#L64) | <code>General</code> | <code>display: inline-block; padding: 3px 5px; border-radius: 4px; font-size: 8px; font-weight: 500; line-height: 1.4; white-space: nowrap</code> |
+| [<code>.variant-lift.positive</code>](../client/src/styles.css#L65) | <code>General</code> | <code>background: #edf7ec; color: #388b58</code> |
+| [<code>.variant-lift.negative</code>](../client/src/styles.css#L66) | <code>General</code> | <code>background: #fcf1e7; color: #ac6b4d</code> |
+| [<code>.variant-detail</code>](../client/src/styles.css#L67) | <code>General</code> | <code>flex-wrap: wrap; row-gap: 7px</code> |
+| [<code>.experiment-footer</code>](../client/src/styles.css#L68) | <code>General</code> | <code>flex-wrap: wrap; align-items: flex-start; line-height: 1.7</code> |
+| [<code>.stat-dot.green</code>](../client/src/styles.css#L69) | <code>General</code> | <code>background: #86b496</code> |
+| [<code>.sync-history,.audit-panel</code>](../client/src/styles.css#L72) | <code>General</code> | <code>margin-top: 25px</code> |
+| [<code>.sync-history .panel-heading,.audit-panel .panel-heading</code>](../client/src/styles.css#L73) | <code>General</code> | <code>padding-bottom: 20px</code> |
+| [<code>.pill.failed</code>](../client/src/styles.css#L74) | <code>General</code> | <code>background: #fff0ed; color: #b35b47</code> |
+| [<code>.diagnostic-cell</code>](../client/src/styles.css#L75) | <code>General</code> | <code>white-space: normal; min-width: 180px; max-width: 310px; line-height: 1.8; overflow-wrap: anywhere</code> |
+| [<code>.history-error</code>](../client/src/styles.css#L76) | <code>General</code> | <code>margin: 0 22px 22px</code> |
+| [<code>.audit-action</code>](../client/src/styles.css#L77) | <code>General</code> | <code>display: block; font-size: 10px; font-weight: 550; color: #59754e</code> |
+| [<code>.audit-action-code</code>](../client/src/styles.css#L78) | <code>General</code> | <code>display: block; font-size: 8px; color: #99a58f; margin-top: 5px</code> |
+| [<code>.overview-toolbar</code>](../client/src/styles.css#L80) | <code>@media (max-width:720px)</code> | <code>gap: 13px</code> |
+| [<code>.overview-period</code>](../client/src/styles.css#L81) | <code>@media (max-width:720px)</code> | <code>width: 100%; justify-content: space-between; gap: 11px</code> |
+| [<code>.date-range</code>](../client/src/styles.css#L82) | <code>@media (max-width:720px)</code> | <code>flex-wrap: wrap; font-size: 8px</code> |
+| [<code>.date-caption</code>](../client/src/styles.css#L83) | <code>@media (max-width:720px)</code> | <code>font-size: 7px</code> |
+| [<code>.panel-actions</code>](../client/src/styles.css#L84) | <code>@media (max-width:720px)</code> | <code>gap: 8px</code> |
+| [<code>.revenue-panel .panel-heading</code>](../client/src/styles.css#L85) | <code>@media (max-width:720px)</code> | <code>flex-wrap: wrap</code> |
+| [<code>.panel-actions .source-label</code>](../client/src/styles.css#L86) | <code>@media (max-width:720px)</code> | <code>font-size: 8px</code> |
+| [<code>.export-button</code>](../client/src/styles.css#L87) | <code>@media (max-width:720px)</code> | <code>font-size: 9px; padding: 7px 9px</code> |
+| [<code>.section-actions</code>](../client/src/styles.css#L88) | <code>@media (max-width:720px)</code> | <code>gap: 10px</code> |
+| [<code>.sandbox-banner</code>](../client/src/styles.css#L89) | <code>@media (max-width:720px)</code> | <code>font-size: 9px; padding: 9px 11px; margin-bottom: 25px</code> |
+| [<code>.sync-history,.audit-panel</code>](../client/src/styles.css#L90) | <code>@media (max-width:720px)</code> | <code>margin-top: 18px</code> |
+| [<code>.history-error</code>](../client/src/styles.css#L91) | <code>@media (max-width:720px)</code> | <code>margin: 0 16px 16px</code> |
+| [<code>.sync-history .panel-heading,.audit-panel .panel-heading</code>](../client/src/styles.css#L92) | <code>@media (max-width:720px)</code> | <code>align-items: flex-start</code> |
+| [<code>.sync-history .panel-heading h2,.audit-panel .panel-heading h2</code>](../client/src/styles.css#L93) | <code>@media (max-width:720px)</code> | <code>font-size: 12px</code> |
+| [<code>.sync-history .panel-heading .text-button,.audit-panel .panel-heading .text-button</code>](../client/src/styles.css#L94) | <code>@media (max-width:720px)</code> | <code>font-size: 9px</code> |
 
-Total: **483 reglas de selectores**, incluidos overrides responsive y pasos de animación. Los valores CSS no representan métricas de negocio.
+Total: 531 reglas CSS.

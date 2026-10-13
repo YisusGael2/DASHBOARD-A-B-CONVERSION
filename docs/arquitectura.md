@@ -4,7 +4,7 @@
 
 Centraliza reúne datos de las tiendas de **una agencia**. Una tienda es un tenant; varios usuarios cliente pueden pertenecer a esa tienda. Cada cliente tiene exactamente una tienda. Los empleados tienen `store_id = NULL`, y sus permisos se determinan por el rol, no por ese valor nulo.
 
-El MVP tiene autenticación, lectura de dashboards, creación de tiendas y accesos, almacenamiento de credenciales y sincronización manual. Los resultados de Intelligems están disponibles en demostración; la sincronización real está pendiente. No existe una entidad de agencias, facturación SaaS ni enrutamiento entre distintas agencias.
+El MVP tiene autenticación, lectura de dashboards, creación de tiendas y accesos, almacenamiento de credenciales, adaptadores para los tres proveedores, sincronización manual, exportación CSV e históricos. Sandbox permite recorrer el mismo flujo de persistencia sin cuentas externas. No existe una entidad de agencias, facturación SaaS ni enrutamiento entre distintas agencias.
 
 ## Conexiones principales
 
@@ -20,7 +20,8 @@ flowchart LR
   API --> SYNC["syncProvider"]
   SYNC --> S["Shopify: GraphQL"]
   SYNC --> C["Clarity: Export API"]
-  SYNC --> I["Intelligems: 501 pendiente"]
+  SYNC --> I["Intelligems: experiences API"]
+  SYNC --> M["Sandbox: datos deterministas sin fetch"]
   INIT["migrate / seed / bootstrap"] -->|"cuenta privilegiada de instalación"| DB
 ```
 
@@ -66,20 +67,23 @@ flowchart TD
 | `server/package.json` | Express, pg, JWT, Argon2, Helmet, dotenv y rate limit | Workspace raíz |
 | `server/src/index.js` | Valida configuración, escucha y cierra recursos | `createApp`, `config`, `pool` |
 | `server/src/config.js` | Carga `.env` raíz y reúne parámetros del proceso | Variables inyectadas; consumidoras del servidor |
-| `server/src/app.js` | Handlers HTTP, consultas, agregado y persistencia de sync | Auth, seguridad, DB y adaptadores |
+| `server/src/app.js` | Handlers HTTP, consultas, períodos, estadística y persistencia de sync | Auth, seguridad, DB y adaptadores |
 | `server/src/auth.js` | Login, validación JWT, usuario vigente y permiso de empleado | Funciones SQL de autenticación, Argon2, JWT |
 | `server/src/db.js` | Pool limitado y contexto RLS por transacción | PostgreSQL, handlers |
 | `server/src/security.js` | Validación, DTO públicos, selección de tienda y cifrado | Configuración, auth y handlers |
-| `server/providers/index.js` | Adaptadores HTTPS, validaciones, conversión de datos y errores sanitizados | Shopify y Clarity; dispatcher Intelligems |
+| `server/src/analytics.js` | Prueba z bilateral y lift mediante función pura | Mapeo de variantes en dashboard y pruebas matemáticas |
+| `server/providers/index.js` | Adaptadores HTTPS, Sandbox, validaciones, conversión de datos y errores sanitizados | Shopify, Clarity e Intelligems |
 | `server/scripts/migrate.js` | Crea/configura `dashboard_app` e instala el esquema | URL administrativa, URL limitada, `db/schema.sql` |
 | `server/scripts/seed.js` | Crea muestras y cuentas únicamente en modo demo | SQL, Argon2, tablas del producto |
 | `server/scripts/bootstrap.js` | Crea el primer Super Admin de una base sin demo | Variables `ADMIN_*`, URL administrativa |
 | `db/schema.sql` | DDL, funciones, RLS, restricciones y permisos | PostgreSQL; scripts y backend |
 | `db/README.md` | Resumen del contrato PostgreSQL | Esquema y referencia detallada |
 | `server/providers/README.md` | Compatibilidad y significado de adaptadores | Código de proveedores y referencia detallada |
-| `server/test/integration.test.js` | 10 casos de autenticación, API y RLS con DB real | `createApp`, pools, JWT y cifrado |
-| `server/providers/providers.test.js` | 12 casos con respuestas externas simuladas | `syncProvider`, `ProviderError`, `fetch` sustituido |
-| `tests/browser/dashboard.spec.js` | 8 flujos completos de interfaz y permisos | Playwright, API, DB para limpiar fixtures |
+| `server/test/integration.test.js` | Autenticación, API, importación, períodos e históricos con DB real | `createApp`, pools, JWT y cifrado |
+| `server/test/analytics.test.js` | Casos de referencia, límites y entradas inválidas de prueba z | `calculateZTest`; sin consultas DB |
+| `server/test/security.test.js` | Proyección segura de históricos y metadata de auditoría | `publicSyncRun`, `publicAuditEvent`; sin consultas DB |
+| `server/providers/providers.test.js` | Normalización, errores y Sandbox sin cuentas externas | `syncProvider`, `ProviderError`, `fetch` sustituido |
+| `tests/browser/dashboard.spec.js` | Flujos completos de interfaz, exportación y permisos | Playwright, API, DB para limpiar fixtures |
 | `playwright.config.js` | Navegador, URL, servidor, reintentos y trazas | Suite de navegador y servidor compilado |
 | `docs/*.md` | Referencia funcional y operativa del código propio | Todos los archivos anteriores |
 
@@ -94,7 +98,9 @@ La documentación del código propio no reproduce el código de `node_modules` n
 - **Sincronización fuera de la transacción inicial:** las peticiones HTTPS no retienen una conexión PostgreSQL; el resultado se guarda en otra transacción.
 - **React con estado local:** las vistas cambian mediante `page`, no mediante React Router. Recargar restaura la sesión, pero vuelve a Resumen.
 - **JSONB complementario:** se usa para metadatos y respuesta de Clarity; métricas consultables, relaciones y restricciones siguen en columnas SQL.
+- **Snapshots acumulados:** Intelligems y Clarity se leen sin sumar capturas solapadas; cada fuente conserva el período que representa.
+- **Procedencia Sandbox explícita:** metadata.mock identifica la caché sincronizada. Una nueva credencial no cambia su origen hasta que sync termina correctamente.
 
 ## Flujos que no existen todavía
 
-No hay rutas de edición/eliminación de tiendas o usuarios, restablecimiento de contraseña, refresh token, revocación de sesión por logout, instalación OAuth Shopify, cron de sincronización, webhooks, importación real de experimentos, exportación de informes ni selector de un período arbitrario. Que una tabla permita SQL adicional no implica que exista un botón o una API para hacerlo.
+No hay rutas de edición/eliminación de tiendas o usuarios, restablecimiento de contraseña, refresh token, revocación de sesión por logout, instalación OAuth Shopify, cron de sincronización, webhooks ni selector de fechas arbitrarias. La exportación disponible es CSV en el navegador; no hay informes programados o enviados por correo. Que una tabla permita SQL adicional no implica que exista un botón o una API para hacerlo.

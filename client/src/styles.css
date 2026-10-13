@@ -37,3 +37,59 @@
 .session-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 11px;border:1px solid #dce7df;border-radius:7px;background:#f3f7f4;color:#386a55;font-size:11px;font-weight:600;white-space:nowrap}
 .session-button:hover{background:#e8f1eb;color:#214c3b}
 @media(max-width:720px){.topbar-avatar{display:none}.session-button{padding:8px;font-size:10px;gap:6px}.breadcrumb{min-width:0;overflow:hidden;white-space:nowrap}}
+
+/* Períodos, exportaciones y origen de datos. */
+.overview-toolbar{flex-wrap:wrap}
+.overview-period{display:flex;align-items:center;justify-content:flex-end;gap:14px;flex-wrap:wrap}
+.period-selector{flex-shrink:0}
+.period-selector button{min-width:38px;padding:7px 9px}
+.panel-actions,.section-actions{display:flex;align-items:center;justify-content:flex-end;gap:13px;flex-wrap:wrap}
+.section-actions>.muted{font-size:11px}
+.export-button{font-size:10px;padding:8px 11px;min-height:32px}
+.pill.sandbox{background:#f1edf9;color:#775e9c;letter-spacing:.3px}
+.sandbox-banner{display:flex;align-items:center;gap:9px;padding:10px 13px;margin-bottom:28px;border:1px solid #e4d9f0;border-radius:6px;background:#f8f4fc;color:#7d6994;font-size:10px;line-height:1.7}
+.sandbox-banner>.pill{font-size:8px;padding:3px 7px}
+.sandbox-banner>svg{margin-left:auto}
+.sandbox-help{padding:13px;margin-bottom:20px;border:1px solid #e8e0ef;border-radius:8px;background:#faf7fd}
+.sandbox-help>.button{width:100%;font-size:10px;min-height:35px}
+.sandbox-help>p{margin-top:9px;font-size:9px;color:#8d7d9e;line-height:1.8}
+.integration-top{gap:9px;flex-wrap:wrap}
+
+/* Comparaciones observadas y confianza bilateral. */
+.variant-label{gap:9px;align-items:flex-start}
+.variant-label>span{min-width:0;flex-wrap:wrap;overflow-wrap:anywhere}
+.variant-rate{display:flex;align-items:flex-end;flex-direction:column;gap:5px;flex-shrink:0}
+.variant-rate>strong{font-size:10px;font-weight:550;color:#6a8959}
+.experiment-detailed .variant-rate>strong{font-size:12px}
+.variant-lift{display:inline-block;padding:3px 5px;border-radius:4px;font-size:8px;font-weight:500;line-height:1.4;white-space:nowrap}
+.variant-lift.positive{background:#edf7ec;color:#388b58}
+.variant-lift.negative{background:#fcf1e7;color:#ac6b4d}
+.variant-detail{flex-wrap:wrap;row-gap:7px}
+.experiment-footer{flex-wrap:wrap;align-items:flex-start;line-height:1.7}
+.stat-dot.green{background:#86b496}
+
+/* Tablas protegidas de sincronización y auditoría. */
+.sync-history,.audit-panel{margin-top:25px}
+.sync-history .panel-heading,.audit-panel .panel-heading{padding-bottom:20px}
+.pill.failed{background:#fff0ed;color:#b35b47}
+.diagnostic-cell{white-space:normal;min-width:180px;max-width:310px;line-height:1.8;overflow-wrap:anywhere}
+.history-error{margin:0 22px 22px}
+.audit-action{display:block;font-size:10px;font-weight:550;color:#59754e}
+.audit-action-code{display:block;font-size:8px;color:#99a58f;margin-top:5px}
+@media(max-width:720px){
+  .overview-toolbar{gap:13px}
+  .overview-period{width:100%;justify-content:space-between;gap:11px}
+  .date-range{flex-wrap:wrap;font-size:8px}
+  .date-caption{font-size:7px}
+  .panel-actions{gap:8px}
+  .revenue-panel .panel-heading{flex-wrap:wrap}
+  .panel-actions .source-label{font-size:8px}
+  .export-button{font-size:9px;padding:7px 9px}
+  .section-actions{gap:10px}
+  .sandbox-banner{font-size:9px;padding:9px 11px;margin-bottom:25px}
+  .sync-history,.audit-panel{margin-top:18px}
+  .history-error{margin:0 16px 16px}
+  .sync-history .panel-heading,.audit-panel .panel-heading{align-items:flex-start}
+  .sync-history .panel-heading h2,.audit-panel .panel-heading h2{font-size:12px}
+  .sync-history .panel-heading .text-button,.audit-panel .panel-heading .text-button{font-size:9px}
+}

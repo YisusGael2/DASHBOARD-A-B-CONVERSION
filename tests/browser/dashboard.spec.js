@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { config } from '../../server/src/config.js';
 
@@ -168,6 +169,124 @@ test('crear tienda y guardar integración no inventa métricas ni conexión veri
       await connection.connect();
       try {
         await connection.query('DELETE FROM public.audit_events WHERE store_id=$1', [createdId]);
+        await connection.query('DELETE FROM public.api_integrations WHERE store_id=$1', [createdId]);
+        await connection.query('DELETE FROM public.stores WHERE id=$1', [createdId]);
+      } finally { await connection.end(); }
+    }
+  }
+});
+
+test('selector de período y exportación CSV conservan los datos de la vista', async ({ page }) => {
+  await signIn(page, 'cliente@demo.local');
+  for (const days of [7, 28, 14]) {
+    const responsePromise = page.waitForResponse(response => response.url().includes('/api/dashboard?') && new URL(response.url()).searchParams.get('days') === String(days));
+    await page.getByRole('button', { name: `${days}D`, exact: true }).click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(200);
+    expect((await response.json()).periodDays).toBe(days);
+    await expect(page.locator('.loading')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: `${days}D`, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  }
+  await expect(page.locator('.behavior-stats')).toContainText('Profundidad de scroll');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar CSV', exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.csv$/);
+  const csv = await readFile(await download.path(), 'utf8');
+  expect(csv.charCodeAt(0)).toBe(0xfeff);
+  expect(csv).toContain('Ingresos');
+  expect(csv).toContain('MXN');
+  expect(csv.trim().split(/\r?\n/)).toHaveLength(15);
+  await nav(page, 'Pruebas A/B').click();
+  const experimentsDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Exportar CSV', exact: true }).click();
+  const experimentsCsv = await readFile(await (await experimentsDownload).path(), 'utf8');
+  expect(experimentsCsv.charCodeAt(0)).toBe(0xfeff);
+  expect(experimentsCsv).toContain('Visitantes');
+  expect(experimentsCsv).toContain('Confianza');
+  expect(experimentsCsv.trim().split(/\r?\n/).length).toBeGreaterThan(2);
+});
+
+test('Sandbox conecta tres proveedores, persiste datos y muestra historiales y auditoría', async ({ page }) => {
+  test.setTimeout(60_000);
+  const domain = `sandbox-${randomUUID()}.myshopify.com`;
+  let createdId;
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await signIn(page, 'admin@demo.local');
+    await page.getByRole('button', { name: 'Añadir tienda', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Nombre de la tienda').fill('Tienda Sandbox E2E');
+    await dialog.getByLabel('Dominio de Shopify').fill(domain);
+    const created = page.waitForResponse(response => response.url().endsWith('/api/stores') && response.request().method() === 'POST');
+    await dialog.getByRole('button', { name: 'Crear tienda', exact: true }).click();
+    const storeResponse = await created;
+    expect(storeResponse.status()).toBe(201);
+    createdId = (await storeResponse.json()).store.id;
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.loading')).toHaveCount(0);
+    await nav(page, 'Integraciones').click();
+    for (const [provider, name] of [['shopify', 'Shopify'], ['clarity', 'Microsoft Clarity'], ['intelligems', 'Intelligems']]) {
+      const card = page.locator('.integration-card').filter({ has: page.getByRole('heading', { name, exact: true }) });
+      await card.getByRole('button', { name: 'Configurar', exact: true }).click();
+      const connectDialog = page.getByRole('dialog');
+      await connectDialog.getByRole('button', { name: 'Usar credencial Sandbox (mock_)', exact: true }).click();
+      if (provider === 'shopify') await expect(connectDialog.getByLabel('Dominio de Shopify')).toHaveValue(domain);
+      await connectDialog.getByRole('button', { name: 'Guardar configuración', exact: true }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(card).toContainText('Credencial guardada');
+      const synced = page.waitForResponse(response => response.url().endsWith(`/api/integrations/${provider}/sync`));
+      await card.getByRole('button', { name: 'Sincronizar', exact: true }).click();
+      const syncResponse = await synced;
+      expect(syncResponse.status()).toBe(200);
+      expect((await syncResponse.json()).recordsProcessed).toBe(provider === 'shopify' ? 28 : provider === 'clarity' ? 1 : 6);
+      await expect(page.locator('.loading')).toHaveCount(0);
+      await expect(card).toContainText('Sandbox');
+    }
+    await expect(page.locator('.sync-history tbody tr')).toHaveCount(3);
+    await expect(page.locator('.sync-history')).toContainText('Completada');
+    await expect(page.locator('.sandbox-banner')).toBeVisible();
+    await nav(page, 'Resumen').click();
+    await expect(page.locator('.metric-value').first()).not.toHaveText('No disponible');
+    await expect(page.locator('.behavior-stats')).toContainText('68.5');
+    await nav(page, 'Pruebas A/B').click();
+    await expect(page.locator('.experiment-detailed')).toHaveCount(2);
+    await expect(page.locator('.variant-lift').first()).toContainText('vs control');
+    const fixture = new pg.Client({ connectionString: config.databaseAdminUrl });
+    await fixture.connect();
+    try {
+      await fixture.query('UPDATE public.experiments SET name=$2 WHERE store_id=$1 AND external_id=$3', [createdId, '=SUM(1,2) "ensayo"', 'sandbox-experiment-1']);
+    } finally { await fixture.end(); }
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'El panorama completo.' })).toBeVisible();
+    await expect(page.locator('.loading')).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'Seleccionar tienda' }).selectOption(createdId);
+    await expect(page.locator('.store-domain')).toContainText(domain);
+    await expect(page.locator('.loading')).toHaveCount(0);
+    await nav(page, 'Pruebas A/B').click();
+    await expect(page.locator('.experiment-detailed')).toHaveCount(2);
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Exportar CSV', exact: true }).click();
+    const csv = await readFile(await (await downloaded).path(), 'utf8');
+    expect(csv).toContain('Control');
+    expect(csv).toContain('Variante B');
+    expect(csv).toContain('"\'=SUM(1,2) ""ensayo"""');
+    expect(csv.trim().split(/\r?\n/)).toHaveLength(5);
+    await nav(page, 'Equipo y accesos').click();
+    await expect(page.locator('.audit-panel')).toContainText('Tienda Sandbox E2E');
+    await expect(page.locator('.audit-panel')).toContainText('integration.synced');
+    await expect(page.locator('.audit-panel')).toContainText('admin@demo.local');
+    expect(errors).toEqual([]);
+  } finally {
+    if (createdId) {
+      const connection = new pg.Client({ connectionString: config.databaseAdminUrl });
+      await connection.connect();
+      try {
+        await connection.query('DELETE FROM public.audit_events WHERE store_id=$1', [createdId]);
+        await connection.query('DELETE FROM public.experiments WHERE store_id=$1', [createdId]);
+        await connection.query('DELETE FROM public.daily_metrics WHERE store_id=$1', [createdId]);
+        await connection.query('DELETE FROM public.clarity_metrics WHERE store_id=$1', [createdId]);
         await connection.query('DELETE FROM public.api_integrations WHERE store_id=$1', [createdId]);
         await connection.query('DELETE FROM public.stores WHERE id=$1', [createdId]);
       } finally { await connection.end(); }

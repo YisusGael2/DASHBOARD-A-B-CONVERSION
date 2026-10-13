@@ -4,7 +4,7 @@ Dashboard para **una sola agencia e-commerce** y sus clientes Shopify. Centraliz
 
 ## Documentación completa
 
-Consulta el [índice de documentación](docs/README.md) para arquitectura, funciones, componentes, API, esquema SQL, integraciones, seguridad, operación y el inventario de callbacks. Para empezar en tu equipo, sigue la [guía de pruebas locales](docs/pruebas-locales.md), con el recorrido por roles y las 30 pruebas automáticas.
+Consulta el [índice de documentación](docs/README.md) para arquitectura, funciones, componentes, API, esquema SQL, integraciones, seguridad, operación y el inventario de callbacks. Para empezar en tu equipo, sigue la [guía de pruebas locales](docs/pruebas-locales.md), con el recorrido por roles, Sandbox y las suites automáticas.
 
 ## Abrir en local
 
@@ -26,6 +26,15 @@ http://localhost:8080
 
 Las claves generadas y `.env` no se suben a Git. El comando conserva un `.env` existente.
 
+Si ya lo tienes descargado con Git, actualiza y reconstruye sin borrar tu base:
+
+```bash
+git pull origin main
+npm run local:up
+```
+
+Después recarga `http://localhost:8080`. La actualización conserva tu `.env` y el volumen PostgreSQL.
+
 ## Cuentas de demostración
 
 Contraseña de las cuatro cuentas: **`Demo1234!`**. Solo se crean cuando `DEMO_MODE=true`; nunca utilices estas cuentas en un despliegue público.
@@ -43,10 +52,14 @@ Los datos de ejemplo están identificados como **demostración**. Las conexiones
 
 - Iniciar sesión y cerrar sesión con cada rol.
 - Consultar ventas, pedidos, sesiones, experimentos y variantes de ejemplo.
+- Seleccionar períodos de 7, 14 o 28 días, consultar profundidad de scroll y exportar CSV.
 - Cambiar de tienda como empleado; acceder solo a la tienda propia como cliente.
 - Crear tiendas y usuarios con los permisos correspondientes.
 - Configurar las credenciales de cada integración sin devolverlas al navegador.
 - Comprobar las restricciones de acceso del backend y de PostgreSQL.
+- Sincronizar los tres proveedores con credenciales Sandbox, revisar ejecuciones y consultar auditoría como empleado.
+
+Para probar la persistencia completa sin cuentas externas, crea una tienda de prueba y usa **Integraciones → Configurar → Usar credencial Sandbox (mock_) → Guardar → Sincronizar** en cada proveedor. Sandbox genera datos deterministas, cifra la credencial y utiliza los mismos upserts y políticas RLS que una sincronización externa. Las pantallas identifican los datos como Sandbox. Consulta el [recorrido completo](docs/pruebas-locales.md#4-recorrido-sandbox-sin-cuentas-externas).
 
 ## Integraciones reales y límites
 
@@ -54,11 +67,11 @@ La demostración funciona sin claves de Shopify, Clarity ni Intelligems. Para da
 
 - **Shopify:** adaptador de lectura de pedidos mediante GraphQL Admin API. Requiere dominio canónico `*.myshopify.com` y un access token válido con acceso a pedidos. El token se introduce desde la sección Integraciones. La instalación OAuth completa y la actualización programada quedan fuera de este MVP. Las ventas de pedidos no proporcionan por sí solas sesiones ni conversión.
 - **Clarity:** adaptador de Data Export API para las métricas admitidas por la respuesta del proveedor. Requiere autenticación y disponibilidad de la API en el proyecto. No importa grabaciones ni heatmaps, ni atribuye automáticamente sesiones a variantes A/B.
-- **Intelligems:** los experimentos funcionan con datos de demostración. La sincronización real está pendiente de verificar el endpoint y el acceso de tu cuenta; el backend responde explícitamente que esa capacidad aún no está implementada.
+- **Intelligems:** adaptador GET `https://api.intelligems.io/v1/experiences` con `x-api-key`, normalización de experimentos/variantes e importación transaccional. Implementa el contrato solicitado; el acceso y la compatibilidad con tu cuenta requieren validación externa. Las métricas se leen como snapshots acumulados, sin sumarlos entre fechas.
 
-Los adaptadores de Shopify y Clarity tienen pruebas con respuestas simuladas. No están validados contra tus cuentas ni contra una API externa en este entorno. Los errores de autenticación, permisos o compatibilidad se muestran como errores de sincronización; no se sustituyen por datos de ejemplo. Revisa [la documentación de los adaptadores](server/providers/README.md) antes de usar datos reales.
+Los tres adaptadores tienen pruebas con respuestas controladas y Sandbox. No están validados contra tus cuentas ni contra una API externa en este entorno. Los errores de autenticación, permisos o compatibilidad se muestran como errores de sincronización; no se sustituyen por datos de ejemplo. Revisa [la documentación de los adaptadores](server/providers/README.md) antes de usar datos reales.
 
-No se mezclan datos demo y reales de una misma fuente. Una métrica no disponible se muestra sin valor. Los ingresos tienen una definición documentada en el adaptador y conservan su moneda. No se calcula un ganador A/B a partir de una simple diferencia observada.
+No se mezclan datos demo con fuentes sincronizadas de una misma tienda. Sandbox usa las fuentes de importación y se identifica mediante metadata pública; no acredita una conexión externa. Una métrica no disponible se muestra sin valor. Los ingresos tienen una definición documentada en el adaptador y conservan su moneda. Las pruebas A/B muestran lift y confianza estimada mediante una prueba z bilateral cuando hay datos válidos; ese porcentaje no es la probabilidad de que una variante gane y no se declara un ganador automático.
 
 ## Desarrollo con Node.js
 

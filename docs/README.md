@@ -6,7 +6,7 @@ Esta documentación describe la implementación del **Dashboard de Centralizaci�
 
 | Documento | Qué responde |
 | --- | --- |
-| [Pruebas locales](pruebas-locales.md) | Cómo abrirlo en tu equipo, qué probar con cada rol y cómo ejecutar las 30 pruebas |
+| [Pruebas locales](pruebas-locales.md) | Cómo actualizarlo y abrirlo en tu equipo, probar cada rol y Sandbox, y ejecutar las suites |
 | [Arquitectura y archivos](arquitectura.md) | Cómo se conectan interfaz, API, PostgreSQL, Docker y proveedores; responsabilidad de cada archivo |
 | [Backend y funciones](backend.md) | Nombre, firma, mecanismo, dependencias y errores de cada función del servidor |
 | [Frontend y funciones](frontend.md) | Componentes, funciones internas, estado, efectos y conexión de cada pantalla con la API |
@@ -25,8 +25,9 @@ Esta documentación describe la implementación del **Dashboard de Centralizaci�
 - `store_id` es el nombre SQL; `storeId` es su representación JSON. El usuario autenticado interno conserva los nombres SQL.
 - Las firmas en los catálogos usan los nombres del código. Los handlers HTTP y callbacks sin nombre llevan una **etiqueta documental**, no un nombre nuevo en la aplicación.
 - Los enlaces `#L...` llevan a líneas del código en GitHub. El inventario debe actualizarse cuando cambie la ubicación de una función.
-- `null` significa dato no disponible. `0` significa un valor medido o sintético igual a cero.
+- `null` significa dato no disponible. `0` significa un valor medido o sintético igual a cero; el normalizador Intelligems usa cero como valor por defecto en conteos ausentes según su contrato.
 - Un estado `credential_saved` confirma almacenamiento cifrado; `connected` indica una sincronización satisfactoria. Ninguno sustituye comprobar permisos y significado de la información recibida.
+- `mode` conserva los valores `demo`/`live`. `sandbox:true` identifica una simulación dentro del flujo de importación live; no significa una llamada externa verificada.
 - Las dependencias exactas instaladas están en `package-lock.json`; los rangos admitidos están en los tres `package.json`.
 
 ## Mantener la documentación

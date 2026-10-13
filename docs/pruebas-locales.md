@@ -27,9 +27,18 @@ http://localhost:8080
 
 En este camino no necesitas `npm ci` en tu equipo para iniciar la app: Docker instala sus propias dependencias. Sí lo necesitas para ejecutar los tests desde la terminal del host.
 
+**Si ya tienes el proyecto con Git**, actualiza primero desde esa misma carpeta:
+
+```bash
+git pull origin main
+npm run local:up
+```
+
+Recarga `http://localhost:8080` al terminar. local:up reconstruye la imagen con el código actualizado; conserva .env y la base local. Si descargaste un ZIP, descarga la nueva versión en otra carpeta y conserva tu configuración/datos de forma explícita: git pull requiere un checkout Git.
+
 ## 2. Cuentas y resultado esperado
 
-Todas las cuentas demo nuevas usan **Demo1234!**.
+Todas las cuentas demo nuevas usan **`Demo1234!`**.
 
 | Cuenta | Rol | Qué debes ver |
 | --- | --- | --- |
@@ -54,9 +63,24 @@ Las pantallas deben indicar DEMO. Los importes y resultados son ficticios. La se
 
 Al cambiar de tienda, comprueba que la lista se abra al pulsar la **flecha**, además del nombre; el control sigue permitiendo usar teclado.
 
-No introduzcas credenciales reales únicamente para recorrer la demo. Guardar cualquier credencial cambia toda esa tienda a fuente live y oculta sus muestras. Usa la nueva tienda de prueba para configurar integraciones sin cambiar Nómada/Casa Botánica.
+Guardar cualquier credencial cambia toda esa tienda a fuente live y oculta sus muestras. Usa la nueva tienda de prueba para configurar Sandbox sin cambiar Nómada/Casa Botánica.
 
-## 4. Comprobar aislamiento desde la consola del navegador
+## 4. Recorrido Sandbox sin cuentas externas
+
+1. Entra con **admin@demo.local** o Super Admin. Añade una tienda con nombre “Prueba Sandbox”, un dominio único como `prueba-sandbox-agencia.myshopify.com`, moneda MXN y zona America/Mexico_City. Usa otro dominio si ya lo creaste.
+2. Abre **Integraciones → Shopify → Configurar**. Pulsa **Usar credencial Sandbox (mock_)**: el dominio debe coincidir con el de esa tienda y el token queda rellenado. Pulsa **Guardar configuración**; el estado debe ser “Credencial guardada”. Todavía no hay importación.
+3. Pulsa **Sincronizar**. Debe aparecer estado Sandbox/sincronizada y una ejecución “Completada” con 28 filas. El resumen muestra ingresos/pedidos; sesiones y conversión Shopify permanecen “No disponible” porque el importador de pedidos no proporciona ese denominador.
+4. Repite **Configurar → Usar credencial Sandbox → Guardar → Sincronizar** para Clarity. Debe registrar 1 fila y mostrar sesiones, clics, regresos y **Profundidad de scroll 68.5%**. La tarjeta indica snapshot de 3 días.
+5. Repite para Intelligems. Debe registrar 6 filas: 2 experimentos y 4 métricas de variante. Pruebas A/B muestra una prueba En curso y otra Finalizada, cada una con Control/Variante B, tasas, lift y confianza con procedencia simulada. No declara ganador.
+6. En Resumen selecciona **7D**, **14D** y **28D**. La API devuelve el período elegido y el gráfico cambia. El snapshot Clarity sigue con su propio período; los experimentos muestran su resultado acumulado. Con solo 28 días importados no existen 28 días anteriores completos para comparar esa ventana.
+7. Pulsa **Exportar CSV** en Resumen y Pruebas A/B. Abre los archivos: deben conservar caracteres españoles, moneda y fuente Sandbox; el de experimentos contiene una fila por variante de todas las pruebas, independiente del filtro visual.
+8. Regresa a Integraciones: el **Historial de sincronizaciones** muestra los tres proveedores, estados, hora, filas y diagnóstico. Repetir sync el mismo día añade una ejecución, pero reemplaza métricas de la misma clave; no duplica filas o visitantes.
+9. En **Equipo y accesos → Registro de auditoría**, revisa creación de tienda, configuración y sincronización de cada integración con el correo del actor y la tienda.
+10. Crea un CLIENT asignado a la tienda Sandbox. Al entrar con ese usuario podrá leer sus métricas e historial; no tendrá botones de escritura ni acceso a auditoría o a otras tiendas.
+
+Sandbox no hace peticiones externas. Conserva el flujo real de cifrado, descifrado, upsert y RLS. Un token `mock_...` o `sandbox_...` lo activa por integración; no necesitas cambiar .env. La alternativa `MOCK_PROVIDERS=true` activa simulación global y requiere reiniciar el proceso/contenedor. Las credenciales vacías y dominios/ventanas/zonas inválidos siguen siendo errores.
+
+## 5. Comprobar aislamiento desde la consola del navegador
 
 Con cliente@demo.local autenticado, abre DevTools → Console. Este ejemplo usa el token que ya está en el navegador **sin imprimirlo**:
 
@@ -70,7 +94,9 @@ console.log(await response.json()); // Mensaje de acceso denegado
 
 Ese id es Casa Botánica. El id de Nómada es `11111111-1111-4111-8111-111111111111`. Invirtiendo cuenta e id también debe rechazarse. No publiques la pestaña Network ni copies JWT de usuarios reales al pedir ayuda.
 
-## 5. Pruebas automáticas del backend y adaptadores
+También debe responder 403 a `/api/sync-runs?storeId=<otra-tienda>` y a `/api/audit-events` como CLIENT. No cambies el JWT ni el contexto RLS para probar estos rechazos.
+
+## 6. Pruebas automáticas del backend y adaptadores
 
 Con db arrancada y demo preparada:
 
@@ -80,7 +106,7 @@ npm test
 npm run build
 ```
 
-Resultado esperado del runner actual: **22 casos**, 22 passed, 0 failed, 0 skipped. Build debe generar client/dist sin errores. La suite de integración crea filas temporales y consulta con rol limitado/administrativo; usa una DB local de demo, no una de clientes reales.
+Resultado esperado: todos los casos pasan,0 failed,0 skipped. El recuento actual de la ejecución verificada está en [Validación](validacion.md). Build debe generar client/dist sin errores. La suite de integración crea filas temporales y consulta con rol limitado/administrativo; usa una DB local de demo, no una de clientes reales.
 
 Si aún no existe esquema/demo en esa DB, prepara antes:
 
@@ -97,9 +123,9 @@ No ejecutes setup después de borrar .env conservando un volumen cuya configurac
 node --test server/providers/providers.test.js
 ```
 
-Son 12 casos con fetch simulado; no conectan cuentas externas.
+La suite usa fetch controlado y tokens Sandbox; no conecta cuentas externas.
 
-## 6. Pruebas automáticas en navegador
+## 7. Pruebas automáticas en navegador
 
 Con app Docker healthy en el puerto predeterminado 8080 y `npm ci` ya ejecutado:
 
@@ -108,7 +134,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Resultado esperado: **8 passed**. El navegador es headless, por lo que no necesariamente verás una ventana. Para verlo durante la prueba:
+Resultado esperado: todos los flujos pasan. El navegador es headless, por lo que no necesariamente verás una ventana. Para verlo durante la prueba:
 
 ```bash
 npm run test:e2e -- --headed
@@ -124,7 +150,7 @@ En PowerShell define `PLAYWRIGHT_EXECUTABLE_PATH` con la ruta real de tu navegad
 
 Playwright usa por defecto 8080. Si no hay servidor, intenta iniciar npm start con NODE_ENV=production y PORT=8080; ese flujo necesita DB, demo y client/dist preparados. Si modificaste APP_PORT, conserva 8080 para el recorrido predeterminado o revisa la configuración completa, no solo E2E_BASE_URL.
 
-## 7. Qué verifica cada caso
+## 8. Qué verifica cada caso
 
 ### PostgreSQL/API — `server/test/integration.test.js`
 
@@ -137,7 +163,10 @@ Playwright usa por defecto 8080. Si no hay servidor, intenta iniciar npm start c
 | RLS directo | Consulta SQL sin filtro solo ve tenant; escritura cliente y lectura de credenciales denegadas |
 | Pooling | Reutiliza el mismo PID DB y comprueba limpieza tras rollback; sin contexto no ve tiendas |
 | Escalamiento | Admin no crea personal ni eleva CLIENT por SQL; Super Admin sí crea empleado |
-| Cifrado/fuentes | Envelope no contiene token plano; respuesta no lo devuelve; connect queda credential_saved; Intelligems501; datos vacíos no se inventan |
+| Cifrado/fuentes | Envelope no contiene token plano; DTO no lo devuelve; connect queda credential_saved y sync Sandbox queda connected con procedencia explícita |
+| Importador Intelligems | Persiste pruebas, variantes y snapshots; cuenta filas, mantiene idempotencia y cambia control sin violar índice único |
+| Períodos/scroll | days=7/28 responde 200 con periodDays correcto; days=15 responde 400; compara períodos completos y deja cambios null con cobertura parcial; scroll depth disponible se conserva |
+| Históricos/roles | CLIENT consulta solo sus runs y recibe 403 para otra tienda/auditoría; empleados leen auditoría |
 | Unicidad/relaciones | Repetir upsert no duplica; variante no puede apuntar a prueba de otra tienda |
 | Permisos vigentes | JWT anterior no conserva rol antiguo; cuenta deshabilitada pierde acceso |
 
@@ -156,7 +185,13 @@ Playwright usa por defecto 8080. Si no hay servidor, intenta iniciar npm start c
 | HTTP429 | Reintentos acotados |
 | Snapshot Clarity | Preserva ventana; no convierte porcentajes a conteos |
 | Respuesta inesperada | Rechaza estructura no compatible |
-| Pendientes | Intelligems501 y proveedor desconocido400 |
+| Intelligems | Normaliza experiences/experiments, variantes, fechas, importes y confianza; estructuras inválidas fallan sin publicar payload |
+| Sandbox | mock_/sandbox_ y variable global generan datos deterministas sin fetch; siguen validando dominio/token/período/zona |
+| Proveedor desconocido | Despacho no compatible responde 400 |
+
+### Analítica y DTOs — `server/test/analytics.test.js`, `server/test/security.test.js`
+
+La suite matemática compara la prueba z con un resultado de referencia, inversión de grupos, tasas iguales, base de control cero, tasas degeneradas, confianza extrema y conteos incompatibles. Las pruebas de DTO comprueban contrato público, diagnóstico genérico y filtrado de metadata por acción, incluidos secretos adicionales y objetos anidados. Estas suites no consultan cuentas externas ni requieren consultas propias de PostgreSQL.
 
 ### Navegador — `tests/browser/dashboard.spec.js`
 
@@ -170,25 +205,30 @@ Playwright usa por defecto 8080. Si no hay servidor, intenta iniciar npm start c
 | Super Admin | Empleados visibles y formulario con 3 roles |
 | Móvil | 390×540, menú funcional, ancho sin desbordamiento global y logout accesible |
 | Nueva tienda/conexión | Alta por UI; cuatro valores no disponibles; credencial guardada no equivale a sincronización |
+| Flujo Sandbox | Configura/sincroniza los 3 proveedores, conserva etiquetas sintéticas, carga métricas e históricos |
+| Analítica/exportación | Selector de días, scroll, lift/procedencia de confianza y descargas CSV con BOM/escape |
+| Auditoría | Sección disponible para empleados con acciones y actor; no aparece para CLIENT |
 
-## 8. Funciones auxiliares de pruebas
+## 9. Funciones auxiliares de pruebas
 
 | Archivo y función | Cómo / conexiones |
 | --- | --- |
 | integración `request(path,{token,body,method='GET'}={})` | Fetch al servidor efímero que abre la suite, añade headers/body y retorna `{status,body}`; llamada por todos los casos HTTP |
-| integración `signIn(email)` | Usa request con contraseña demo; exige200 y ausencia de hash; retorna JWT internamente |
+| integración `signIn(email)` | Usa request con contraseña demo; exige 200 y ausencia de hash; retorna JWT internamente |
 | integración `before` | Valida config/demo, fuerza pool max1, abre Express en puerto efímero y autentica 4 cuentas |
 | integración `after` | Borra solo fixtures registrados de prueba y sus dependencias; cierra server/pools; no es reset de la DB |
 | proveedores `stubFetch(t,fn)` | Sustituye globalThis.fetch y registra t.after para restaurarlo |
 | proveedores `response(value,status=200,headers={})` | Construye Response con JSON/Content-Type para fixtures |
 | proveedores `order(id,amount,extras={})` | Crea edge/node de pedido, fecha actual, flags y moneySet; extras permite probar casos |
 | proveedores `orders(edges,pageInfo=...)` | Envuelve edges/pageInfo en data.orders del contrato GraphQL |
+| proveedores `environment(t,key,value)` | Guarda variable de entorno anterior, asigna/elimina el valor de prueba y registra restauración mediante t.after; aísla MOCK_PROVIDERS/versión entre casos |
+| proveedores `experience(extras={})` | Fixture normalizado de payload Intelligems con variantes; extras permite probar alias, formatos y rechazos |
 | navegador `signIn(page,email)` | Abre /, rellena login, envía, espera cabecera y fin de carga |
 | navegador `nav(page,name)` | Localiza botón exacto dentro de navegación principal |
 
 Los callbacks de cada test contienen sus aserciones y operaciones descritas en las matrices. El último caso de navegador limpia tienda e integración temporales con URL administrativa en finally. Las pruebas de JWT construyen tokens solo para la suite; no requieren tokens de proveedores reales.
 
-## 9. Leer fallas, detener y pedir ayuda
+## 10. Leer fallas, detener y pedir ayuda
 
 ```bash
 docker compose logs --tail=80 app bootstrap

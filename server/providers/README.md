@@ -30,10 +30,27 @@ pruebas automatizadas usan respuestas simuladas: no demuestran acceso real.
   actual del proyecto. `integration.external_id` identifica el proyecto
   para la configuración; el token determina el proyecto autorizado y el
   adaptador no puede verificar que el identificador introducido coincida.
-- **Intelligems:** la sincronización real devuelve `501
-  INTELLIGEMS_NOT_IMPLEMENTED`. No se inventaron endpoints. Se necesitan
-  documentación y permisos verificables de su API para completar esta
-  integración. Los experimentos del modo de demostración son datos ficticios.
+- **Intelligems:** GET al endpoint fijo
+  `https://api.intelligems.io/v1/experiences`, con `x-api-key` y
+  `credentials.apiKey`. Implementa el contrato solicitado de arreglos
+  `experiences`/`experiments`, normaliza pruebas y variantes, y permite su
+  importación SQL. Rechaza estructuras incompatibles mediante
+  `502 INVALID_RESPONSE`. El acceso, permisos y compatibilidad con una cuenta
+  externa siguen pendientes de validación; los fixtures no acreditan esa conexión.
+
+## Sandbox sin cuentas externas
+
+Tokens con prefijo `mock_` o `sandbox_` activan datos deterministas sin llamar
+a `fetch`. `MOCK_PROVIDERS=true` permite activar la simulación globalmente
+en el proceso. Se validan antes el token, dominio Shopify, período y zona
+horaria, por lo que Sandbox conserva los errores de configuración.
+
+La interfaz ofrece **Usar credencial Sandbox (mock_)** en Configurar. El token
+se guarda cifrado y se descifra por el backend; sync utiliza las mismas
+transacciones, claves únicas y RLS. `mock:true` permanece como metadata y los
+DTO exponen `sandbox:true`. No se presenta esta simulación como una petición
+externa verificada. Shopify genera días de ventas; Clarity un snapshot;
+Intelligems dos pruebas con Control y Variante B.
 
 ## Significado de los datos
 
@@ -47,8 +64,10 @@ población. Las devoluciones de pedidos antiguos solo actualizan su cohorte
 cuando se vuelve a sincronizar su fecha de creación. Confirma esta definición
 contra la documentación oficial antes de utilizarla para decisiones financieras.
 
-El adaptador usa 14 días por defecto cuando su caller no proporciona período.
-El endpoint de esta aplicación solicita 28 días para comparar dos ventanas de 14.
+El adaptador Shopify usa 28 días por defecto cuando su caller no proporciona período.
+El endpoint de esta aplicación solicita 28 días. El dashboard ofrece ventanas
+de 7, 14 o 28 y consulta también la ventana anterior; si alguna ventana tiene
+cobertura incompleta, los cambios porcentuales se muestran sin comparación.
 El máximo interno es 31, hasta 5.000 pedidos y 60 segundos.
 Si se excede el límite, reduce el período. Fechas vacías se devuelven como cero
 para reemplazar la caché del período. No se suman monedas distintas. Sesiones
@@ -62,6 +81,13 @@ de scroll si aparecen los campos compatibles en una única fila sin dimensiones.
 Los porcentajes de sesiones con clics muertos, rage clicks o quick backs no
 se convierten en conteos. No se generan URLs de grabaciones/heatmaps ni se
 atribuye comportamiento a variantes A/B.
+
+Intelligems guarda métricas acumuladas como snapshots por fecha local de captura,
+variante, fuente y moneda. El dashboard lee la captura más reciente de cada
+variante y no suma capturas solapadas. Conserva confianza del proveedor cuando
+es numérica y compatible; si falta, puede calcular confianza de una prueba z
+bilateral y lift observado frente al control. Ese porcentaje no es la
+probabilidad de que gane una variante. No se declara un ganador automático.
 
 ## Protección y pruebas
 

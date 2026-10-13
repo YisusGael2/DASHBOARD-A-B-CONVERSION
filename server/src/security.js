@@ -39,7 +39,29 @@ export function publicStore(store) {
 }
 
 export function publicIntegration(row) {
-  return { id: row.id, provider: row.provider, status: row.status, lastSyncedAt: row.last_synced_at, externalAccountId: row.external_id };
+  return { id: row.id, provider: row.provider, status: row.status, lastSyncedAt: row.last_synced_at, externalAccountId: row.external_id, sandbox: row.metadata?.mock === true };
+}
+
+export function publicSyncRun(row) {
+  // Solo el diagnóstico controlado por nuestro backend se publica. Un mensaje
+  // arbitrario persistido por otro proceso jamás se convierte en un error HTTP.
+  const error = row.error ? 'No se pudo completar la sincronización.' : null;
+  return { id: row.id, integrationId: row.integration_id, provider: row.provider, status: row.status, startedAt: row.started_at, finishedAt: row.finished_at, recordsProcessed: Number(row.records_processed || 0), error };
+}
+
+export function publicAuditEvent(row) {
+  const fields = {
+    'user.created': { userId: 'string', role: 'string' },
+    'store.created': { domain: 'string', currency: 'string' },
+    'integration.connected': { provider: 'string' },
+    'integration.synced': { provider: 'string', recordsProcessed: 'number' },
+  };
+  const source = row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {};
+  const metadata = {};
+  for (const [key, type] of Object.entries(fields[row.action] || {})) {
+    if (typeof source[key] === type && (type !== 'number' || Number.isFinite(source[key]))) metadata[key] = source[key];
+  }
+  return { id: row.id, storeId: row.store_id, storeName: row.store_name || null, actorUserId: row.actor_user_id, actorEmail: row.actor_email || null, action: row.action, metadata, createdAt: row.created_at };
 }
 
 export function storeIdFor(user, requested) {

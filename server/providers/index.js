@@ -4,6 +4,7 @@
  */
 const SHOPIFY_DEFAULT_VERSION = '2026-07';
 const CLARITY_ENDPOINT = 'https://www.clarity.ms/export-data/api/v1/project-live-insights';
+const INTELLIGEMS_ENDPOINT = 'https://api.intelligems.io/v1/experiences';
 const PAGE_SIZE = 250;
 const MAX_PAGES = 20;
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -24,6 +25,25 @@ function requiredToken(value) {
     throw new ProviderError('Falta una credencial válida para esta integración.', 400, 'MISSING_CREDENTIAL');
   }
   return value.trim();
+}
+
+function isMockToken(token) {
+  return token.startsWith('mock_') || token.startsWith('sandbox_') || process.env.MOCK_PROVIDERS === 'true';
+}
+
+// Stable synthetic data depends on public store information, never on secrets.
+function mockSeed(value) {
+  let hash = 2166136261;
+  for (const character of String(value)) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+  return hash;
+}
+
+function storeCurrency(store) {
+  const currency = store.currency || 'USD';
+  if (typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) {
+    throw new ProviderError('Configura una moneda válida para la tienda antes de sincronizar.', 400, 'MISSING_CURRENCY');
+  }
+  return currency;
 }
 
 function shopifyDomain(value) {
@@ -60,10 +80,10 @@ function shiftDate(date, delta) {
   return value.toISOString().slice(0, 10);
 }
 
-// Exact decimal arithmetic: no floating-point rounding for Shopify money.
+// Exact decimal arithmetic: no floating-point rounding for provider money.
 function toUnits(amount) {
   if (typeof amount !== 'string' || !/^\d{1,18}(?:\.\d{1,6})?$/.test(amount)) {
-    throw new ProviderError('Shopify devolvió un importe no compatible. No se guardaron resultados parciales.', 502, 'INVALID_MONEY');
+    throw new ProviderError('El proveedor devolvió un importe no compatible. No se guardaron resultados parciales.', 502, 'INVALID_MONEY');
   }
   const [whole, fraction = ''] = amount.split('.');
   return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0'));
@@ -172,10 +192,21 @@ async function syncShopify({ store = {}, credentials = {}, days }) {
   if (!/^20\d{2}-(01|04|07|10)$/.test(apiVersion)) {
     throw new ProviderError('SHOPIFY_API_VERSION debe usar el formato YYYY-MM de una versión estable.', 500, 'INVALID_API_VERSION');
   }
-  const count = windowDays(days, 31);
+  const count = windowDays(days === undefined ? 28 : days, 31);
   const now = new Date();
   const today = localDate(now, store.timezone || 'UTC');
   const startDate = shiftDate(today, 1 - count);
+  if (isMockToken(token)) {
+    const currency = storeCurrency(store);
+    const averageCents = currency === 'MXN' ? 85_000 : 6_500;
+    return { mock: true, daily: Array.from({ length: count }, (_unused, index) => {
+      const date = shiftDate(startDate, index);
+      const seed = mockSeed(`${domain}:${date}`);
+      const orders = 18 + seed % 53;
+      const units = BigInt(orders) * BigInt(averageCents + seed % 1_700) * 10_000n;
+      return { date, revenue: fromUnits(units), orders, currency, sessions: null, conversionRate: null };
+    }) };
+  }
   // One extra UTC day covers even UTC+14; local calendar dates are filtered below.
   const from = `${shiftDate(startDate, -1)}T00:00:00Z`;
   const query = `created_at:>='${from}' created_at:<='${now.toISOString()}'`;
@@ -260,6 +291,19 @@ function numeric(value, { integer = false, maximum = Number.MAX_SAFE_INTEGER } =
 async function syncClarity({ store = {}, integration = {}, credentials = {}, days }) {
   const token = requiredToken(credentials.apiKey);
   const count = windowDays(days, 3);
+  const date = localDate(new Date(), store.timezone || 'UTC');
+  if (isMockToken(token)) {
+    const seed = mockSeed(store.domain || integration.external_id || 'mock-project');
+    return { mock: true, clarity: [{
+      date, sessions: 2_100 + seed % 1_700,
+      deadClicks: 35 + seed % 29, rageClicks: 9 + seed % 13,
+      quickBacks: 23 + seed % 31, scrollDepth: 68.5,
+      metadata: {
+        aggregation: 'period_snapshot', windowDays: count, snapshotDate: date,
+        projectId: integration.external_id || 'mock-project', mock: true,
+      },
+    }] };
+  }
   const url = new URL(CLARITY_ENDPOINT);
   url.searchParams.set('numOfDays', String(count));
   const payload = await requestJson(url.toString(), {
@@ -272,7 +316,6 @@ async function syncClarity({ store = {}, integration = {}, credentials = {}, day
   // Undimensioned export is a period snapshot. Percentages must not become counts.
   const traffic = payload.find((metric) => metric.metricName === 'Traffic')?.information;
   const scroll = payload.find((metric) => metric.metricName === 'ScrollDepth')?.information;
-  const date = localDate(new Date(), store.timezone || 'UTC');
   return { clarity: [{
     date,
     sessions: traffic?.length === 1 ? numeric(traffic[0].totalSessionCount, { integer: true }) : null,
@@ -287,12 +330,102 @@ async function syncClarity({ store = {}, integration = {}, credentials = {}, day
   }] };
 }
 
+function intelligemsResponseError() {
+  return new ProviderError('Intelligems devolvió un formato no compatible.', 502, 'INVALID_RESPONSE');
+}
+
+function externalId(value) {
+  if ((typeof value !== 'string' && typeof value !== 'number') || (typeof value === 'number' && !Number.isFinite(value))) {
+    throw intelligemsResponseError();
+  }
+  const id = String(value).trim();
+  if (!id) throw intelligemsResponseError();
+  return id;
+}
+
+function experimentDate(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !Number.isFinite(new Date(value).getTime())) throw intelligemsResponseError();
+  const calendar = /^(\d{4})-(\d{2})-(\d{2})(?:T|$)/.exec(value);
+  if (calendar) {
+    const [, year, month, day] = calendar.map(Number);
+    const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    if (month < 1 || month > 12 || day < 1 || day > maxDay) throw intelligemsResponseError();
+  }
+  return value;
+}
+
+function mockExperiments(store, integration, today, count, currency) {
+  const seed = mockSeed(store.domain || integration.external_id || 'mock-intelligems');
+  const averageCents = currency === 'MXN' ? 85_000 : 6_500;
+  return [{ name: 'Sandbox · Precio del producto', status: 'active' }, { name: 'Sandbox · Umbral de envío', status: 'completed' }].map((test, index) => {
+    const controlVisitors = 3_200 + seed % 700 + index * 400;
+    const controlOrders = 105 + seed % 17 + index * 15;
+    return {
+      externalId: `sandbox-experiment-${index + 1}`, name: test.name, status: test.status,
+      startedAt: `${shiftDate(today, index ? -28 : -Math.min(count, 14))}T12:00:00.000Z`,
+      endedAt: index ? `${shiftDate(today, -2)}T12:00:00.000Z` : null,
+      confidence: index ? 97.2 : null,
+      variants: [{ externalId: 'control', name: 'Control', isControl: true }, { externalId: 'variant-b', name: 'Variante B', isControl: false }].map((variant, variantIndex) => {
+        const orders = controlOrders + variantIndex * (index ? 27 : 14);
+        return {
+          ...variant, date: today, visitors: controlVisitors + variantIndex * 80, orders,
+          revenue: fromUnits(BigInt(orders) * BigInt(averageCents + index * 500) * 10_000n), currency,
+        };
+      }),
+    };
+  });
+}
+
+async function syncIntelligems({ store = {}, integration = {}, credentials = {}, days }) {
+  const token = requiredToken(credentials.apiKey);
+  const count = windowDays(days, 28);
+  const today = localDate(new Date(), store.timezone || 'UTC');
+  const currency = storeCurrency(store);
+  if (isMockToken(token)) return { mock: true, experiments: mockExperiments(store, integration, today, count, currency) };
+  const payload = await requestJson(INTELLIGEMS_ENDPOINT, {
+    method: 'GET', headers: { 'x-api-key': token, Accept: 'application/json' },
+  }, Date.now() + SYNC_TIMEOUT_MS);
+  const experiences = Array.isArray(payload?.experiences) ? payload.experiences : payload?.experiments;
+  if (!Array.isArray(experiences)) throw intelligemsResponseError();
+  const experimentIds = new Set();
+  const experiments = experiences.map((exp) => {
+    if (!exp || typeof exp !== 'object' || Array.isArray(exp) || !Array.isArray(exp.variants) || exp.variants.length < 1) throw intelligemsResponseError();
+    const id = externalId(exp.id || exp.externalId);
+    if (experimentIds.has(id)) throw intelligemsResponseError();
+    experimentIds.add(id);
+    const startedAt = experimentDate(exp.startedAt || exp.started_at || null);
+    const endedAt = experimentDate(exp.endedAt || exp.ended_at || null);
+    if (startedAt && endedAt && Date.parse(endedAt) < Date.parse(startedAt)) throw intelligemsResponseError();
+    const variantIds = new Set();
+    const variants = exp.variants.map((variant) => {
+      if (!variant || typeof variant !== 'object' || Array.isArray(variant)) throw intelligemsResponseError();
+      const variantId = externalId(variant.id || variant.externalId);
+      if (variantIds.has(variantId)) throw intelligemsResponseError();
+      variantIds.add(variantId);
+      return {
+        externalId: variantId, name: String(variant.name || 'Variante').trim() || 'Variante',
+        isControl: Boolean(variant.isControl || variant.is_control), date: today,
+        visitors: numeric(variant.visitors, { integer: true, maximum: 2_147_483_647 }) ?? 0,
+        orders: numeric(variant.orders ?? variant.conversions, { integer: true, maximum: 2_147_483_647 }) ?? 0,
+        revenue: fromUnits(toUnits(String(variant.revenue ?? '0.00'))), currency,
+      };
+    });
+    if (variants.filter((variant) => variant.isControl).length > 1) throw intelligemsResponseError();
+    return {
+      externalId: id, name: String(exp.name || 'Experimento').trim() || 'Experimento',
+      status: ['draft', 'active', 'completed'].includes(exp.status) ? exp.status : 'active',
+      startedAt, endedAt, confidence: numeric(exp.confidence, { integer: false, maximum: 100 }), variants,
+    };
+  });
+  return { experiments };
+}
+
 export async function syncProvider(provider, options) {
   switch (String(provider).toLowerCase()) {
     case 'shopify': return syncShopify(options || {});
     case 'clarity': return syncClarity(options || {});
-    case 'intelligems':
-      throw new ProviderError('La sincronización real de Intelligems está pendiente de verificar su API y permisos. Usa los datos de demostración para probar el dashboard.', 501, 'INTELLIGEMS_NOT_IMPLEMENTED');
+    case 'intelligems': return syncIntelligems(options || {});
     default:
       throw new ProviderError('Proveedor de integración no soportado.', 400, 'UNKNOWN_PROVIDER');
   }

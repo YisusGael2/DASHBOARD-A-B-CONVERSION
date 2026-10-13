@@ -44,7 +44,7 @@ Ausencia de Bearer, verificación fallida o cuenta inactiva producen `401`. Un r
 
 ### `requireStaff(req, res, next)`
 
-Lee `req.user.role`. Permite `ADMIN` y `SUPER_ADMIN`; cualquier otro rol recibe `HttpError(403)`. Asume que `authenticate` ya se ejecutó. Está en lectura/creación de usuarios, creación de tiendas y configuración/sincronización de integraciones. No decide por sí solo si un Admin puede crear otro empleado: el handler de usuarios agrega esa regla.
+Lee `req.user.role`. Permite `ADMIN` y `SUPER_ADMIN`; cualquier otro rol recibe `HttpError(403)`. Asume que `authenticate` ya se ejecutó. Está en lectura/creación de usuarios, creación de tiendas, auditoría y configuración/sincronización de integraciones. No decide por sí solo si un Admin puede crear otro empleado: el handler de usuarios agrega esa regla.
 
 ### `loginLimiter`
 
@@ -61,21 +61,39 @@ Es middleware construido por `express-rate-limit`, no una función nombrada prop
 | `textValue(value, label, max=200)` | String → string recortado | Exige tipo string, contenido tras `trim` y longitud original <= max. Error `400`. No es un sanitizador HTML ni una política completa de contraseñas | Creación de usuarios/tiendas y `connect` |
 | `publicUser(user)` | Fila SQL → `{id,name,email,role,storeId,status}` | Selección explícita y cambio `store_id` → `storeId`; excluye hash | Login, `/auth/me`, usuarios |
 | `publicStore(store)` | Fila SQL → `{id,name,domain,currency,timeZone,status}` | Traduce `timezone` → `timeZone`; excluye timestamps internos | Tiendas y dashboard |
-| `publicIntegration(row)` | Fila SQL → `{id,provider,status,lastSyncedAt,externalAccountId}` | Traduce `last_synced_at` y `external_id`; no devuelve ciphertext, metadata ni `last_error` | Dashboard y `connect` |
-| `storeIdFor(user, requested)` | Usuario + id opcional → id autorizado | CLIENT usa siempre su `store_id`; si recibió uno diferente, `403`. Un empleado debe enviar un UUID válido. Compara strings del cliente literalmente | `GET /api/dashboard`; después RLS y `requireStore` |
+| `publicIntegration(row)` | Fila SQL → `{id,provider,status,lastSyncedAt,externalAccountId,sandbox}` | Traduce campos SQL; `sandbox` solo es true si metadata.mock es true. No devuelve ciphertext, metadata completa ni `last_error` | Dashboard y `connect` |
+| `publicSyncRun(row)` | Fila SQL → DTO de ejecución | Selecciona id, integración, proveedor, estado y timestamps; convierte records_processed a número. Error no vacío se reemplaza por diagnóstico genérico controlado; no serializa texto arbitrario | `GET /api/sync-runs` |
+| `publicAuditEvent(row)` | Fila SQL/join → DTO de auditoría | Selecciona ids, acción, timestamp, nombre de tienda y correo de actor. Copia solo claves/tipos permitidos por acción; números deben ser finitos. Metadata desconocida se omite | `GET /api/audit-events` |
+| `storeIdFor(user, requested)` | Usuario + id opcional → id autorizado | CLIENT usa siempre su `store_id`; si recibió uno diferente, `403`. Un empleado debe enviar un UUID válido. Compara strings del cliente literalmente | Dashboard e historial sync; después RLS y `requireStore` |
+
+### Proyección de auditoría
+
+`publicAuditEvent` acepta únicamente `{userId,role}` para user.created, `{domain,currency}` para store.created, `{provider}` para integration.connected y `{provider,recordsProcessed}` para integration.synced. La selección explícita evita publicar un secreto añadido por otro proceso a JSONB. La consulta del actor usa columnas públicas de users; no consulta password_hash.
+
+## `server/src/analytics.js`: `calculateZTest`
+
+`calculateZTest(controlVisitors,controlOrders,variantVisitors,variantOrders)` es una función pura: recibe cuatro conteos, no toca DB ni reloj, y retorna `{lift:number/null,confidence:number/null}`. La llama el mapeo de variantes del dashboard y se prueba mediante fixtures matemáticos.
+
+1. Exige enteros seguros, visitantes positivos y conversiones entre 0 y visitantes para ambos grupos. Cualquier entrada incompatible retorna ambos campos null.
+2. Calcula `pc = controlOrders/controlVisitors` y `pv = variantOrders/variantVisitors`. Si pc>0, lift es `(pv-pc)/pc ×100`, redondeado a un decimal; con base 0 queda null.
+3. La proporción combinada es `p = (controlOrders+variantOrders)/(controlVisitors+variantVisitors)`. Si p es 0 o 1 no hay error estándar útil y confidence queda null.
+4. Calcula `SE = sqrt(p*(1-p)*(1/controlVisitors+1/variantVisitors))` y `Z = abs(pv-pc)/SE`.
+5. Aproxima la CDF normal con el polinomio Abramowitz/Stegun 26.2.17. La confianza bilateral es `(2*CDF(Z)-1)*100`, equivalente a `100*(1-valor p)`, limitada a 0..99.9 y redondeada a un decimal.
+
+Requiere exposiciones independientes y conversiones binarias por visitante. No corrige por múltiples comparaciones ni por consultar continuamente un test, y no demuestra causalidad ni probabilidad de ganador. Si orders supera visitantes, el resumen observado puede existir, pero la prueba z rechaza esos conteos. La aplicación no declara ganador ni detiene experimentos automáticamente.
 
 ## `server/src/app.js`: helpers
 
 | Función | Entrada → salida | Cómo lo hace y conexiones |
 | --- | --- | --- |
 | `asyncRoute(fn)` | Handler async → middleware `(req,res,next)` | Invoca `fn`, transforma su resultado en promesa y reenvía rechazo a `next`. La función retornada es un callback sin nombre. Se usa en handlers de IO |
-| `numberOrNull(value)` | Dato pg → `null` o `Number` | Mantiene null/undefined como null; convierte strings numéricos de PostgreSQL. Usada para agregados, variantes y Clarity |
+| `numberOrNull(value)` | Dato pg → `null` o `Number` | Mantiene null/undefined/vacío y valores no finitos como null; convierte strings numéricos de PostgreSQL. Usada para agregados, variantes, confianza y Clarity |
 | `ratio(part, whole)` | Numerador/denominador → porcentaje o null | Si `whole>0`, calcula `part/whole*100` y redondea a dos decimales; de otro modo null. Usada en resumen y variantes |
 | `delta(current, previous)` | Valores actuales/anteriores → cambio porcentual o null | Exige actual no null y anterior >0; calcula `(current-previous)/previous*100` a un decimal. No calcula variación con base cero |
 | `providerName(value)` | Nombre → mismo nombre | Comprueba el Set exacto `shopify`, `clarity`, `intelligems`; ruta no acepta mayúsculas. Error `400` | `connect`, `sync` |
 | `requireStore(client, id)` | Conexión con contexto + UUID → fila de tienda | `SELECT * ... WHERE id=$1`; RLS se aplica; ausencia genera `404` | Dashboard, alta de cliente e integraciones |
 | `storeDate(timeZone)` | Zona IANA → `YYYY-MM-DD` actual | `Intl.DateTimeFormat` y `formatToParts`; helper local `storeDate.value(type)` busca año/mes/día mediante un callback `.find` | Ventana temporal del dashboard |
-| `createApp.aggregate(items)` | Filas diarias → `{revenue,orders,sessions,conversion}` | Lista vacía produce nulls. Suma ingresos/pedidos; sesiones solo si todas las filas tienen dato. Redondea ingreso a dos decimales y usa `ratio`. Es función local del handler dashboard | Dos períodos de 14 días; no llama APIs externas |
+| `createApp.aggregate(items)` | Filas diarias → `{revenue,orders,sessions,conversion}` | Lista vacía produce nulls. Suma ingresos/pedidos; sesiones solo si todas las filas tienen dato. Redondea ingreso a dos decimales y usa `ratio`. Es función local del handler dashboard | Períodos actual/anterior de 7/14/28 días; no llama APIs externas |
 
 ### `createApp()`
 
@@ -93,9 +111,11 @@ Los callbacks HTTP no tienen un nombre de función en el código; se identifican
 | `GET /api/auth/me` | Serializa `req.user` obtenido por `authenticate` con `publicUser` |
 | `GET /api/stores` | `withContext` → SELECT tiendas ordenadas por nombre → `.map(publicStore)` |
 | `GET /api/dashboard` | `storeIdFor` → `withContext` → `requireStore` → consultas y agregados → DTO compuesto |
+| `GET /api/sync-runs` | `storeIdFor` → `withContext` → `requireStore` → últimos 25 runs con proveedor → `.map(publicSyncRun)` |
+| `GET /api/audit-events` | `requireStaff` → UUID opcional → `withContext` → últimos 50 eventos con joins de actor/tienda → `.map(publicAuditEvent)` |
 | `GET /api/users` | `requireStaff` → `withContext` → columnas públicas; ADMIN solo CLIENT, SUPER_ADMIN todos; máximo 500 |
 | `POST /api/users` | Valida y decide rol → hash Argon2id fuera de transacción → `withContext` → valida tienda si cliente → INSERT usuario + auditoría → `publicUser` |
-| `POST /api/stores` | Valida nombre/dominio/moneda/timeZone → INSERT dentro de `withContext` → `publicStore` |
+| `POST /api/stores` | Valida nombre/dominio/moneda/timeZone → INSERT tienda + evento store.created dentro de `withContext` → `publicStore` |
 | `POST /api/integrations/:provider/connect` | Valida proveedor y pertenencia → cifra → upsert metadata + `store_credential` + evento de auditoría → `publicIntegration` |
 | `POST /api/integrations/:provider/sync` | Transacción de preparación → descifrado → HTTPS fuera del pool → transacción de persistencia o registro de fallo |
 | `404 de /api` | Devuelve JSON para rutas API no registradas, después de autenticar |
@@ -105,22 +125,26 @@ Los callbacks HTTP no tienen un nombre de función en el código; se identifican
 ### Construcción del dashboard
 
 1. Lee las integraciones de la tienda. Si alguna tiene `credential_saved`, `connected` o `error`, o el proceso no está en demo, el dashboard entra en `live`. En otro caso utiliza `demo`.
-2. Selecciona fuente de ventas y experimentos según el modo. Las muestras siguen en DB, pero se ocultan en **toda esa tienda** después de guardar una credencial real.
-3. Obtiene la fecha actual de la zona horaria de la tienda. Consulta 28 días de ventas con la moneda de la tienda; separa últimos 14 días y los 14 anteriores. No rellena días ausentes en el handler.
-4. Usa `aggregate` y `delta`. El cálculo de conversión usa pedidos/sesiones disponibles; Shopify real entrega sesiones null, por lo que no genera una conversión real inventada.
-5. Obtiene experimentos de la fuente elegida; suma métricas de sus variantes y lee `metadata.confidence`. No calcula significancia ni declara ganador.
-6. En demo suma Clarity de 14 días. En live usa el último snapshot de Clarity, sin sumar ventanas solapadas, y comunica `windowDays`.
+2. Selecciona fuente de ventas y experimentos según el modo. Las muestras siguen en DB, pero se ocultan en **toda esa tienda** después de guardar cualquier credencial, incluida Sandbox. `sandbox` identifica simulación sin cambiar mode.
+3. Valida `days` como 7/14/28, por defecto 14. Obtiene hoy en la zona de tienda; consulta `2*days` fechas inclusivas con `date >= hoy-(2*days-1)` y moneda/fuente correctas; separa últimos days y los days anteriores. No rellena días ausentes en el handler.
+4. Usa aggregate sobre los datos disponibles. Solo publica cambios con delta si ambas ventanas tienen exactamente days filas; cobertura incompleta conserva los totales actuales conocidos y deja todos los campos *Change en null. El cálculo de conversión usa pedidos/sesiones disponibles; Shopify entrega sesiones null y no genera una conversión inventada.
+5. Obtiene experimentos de la fuente elegida. Un LEFT JOIN LATERAL elige el último snapshot de cada variante, limitado por tenant, fuente y moneda. Metadata.variantIds filtra variantes vigentes tras una nueva importación. Localiza control, aplica calculateZTest a no-control y añade lift/calculatedConfidence. Confianza válida 0..100 de metadata tiene prioridad; si falta usa la primera no-control. Comunica confidenceSource y sandbox, sin declarar ganador.
+6. En demo suma conteos Clarity de los days seleccionados y calcula AVG(scroll_depth) redondeado a un decimal. En live usa el último snapshot sin sumar ventanas solapadas y comunica windowDays, scrollDepth y sandbox. Ese período Clarity es independiente del selector de ventas.
 7. `updatedAt` es el máximo `last_synced_at` de las integraciones disponibles. No es el timestamp de modificación de todas las tablas.
 
-Limitaciones observables: períodos incompletos pueden compararse; el SUM de variantes no limita período/moneda/fuente; las sumas del handler usan `Number` de JavaScript; `scroll_depth` se almacena pero no se devuelve en `behavior`.
+Limitaciones observables: un período incompleto muestra los totales de sus filas conocidas, sin variación contra otro período; el selector no amplía la importación de ventas ni recorta métricas acumuladas de experimentos; las sumas del handler usan `Number` de JavaScript. El ingreso no representa utilidad.
 
 ### Ciclo de sincronización
 
 Primera transacción: verifica tienda y estado; recupera ciphertext mediante `read_credential`; lo descifra; crea `sync_runs(status='running')`. Termina esa transacción antes de la solicitud externa.
 
-`syncProvider` usa **28 días para Shopify y 3 para Clarity** cuando lo llama este endpoint. El valor por defecto interno del adaptador Shopify es 14 solo cuando su caller no proporciona período.
+`syncProvider` usa **28 días para Shopify/Intelligems y 3 para Clarity** cuando lo llama este endpoint. Shopify también usa 28 por defecto si su caller omite el período. Las validaciones ocurren antes de retornar Sandbox; la rama mock no llama a la red.
 
-La transacción final hace upserts de `daily_metrics` o `clarity_metrics`, marca integración `connected` y el run `completed`. Si hubiera experimentos reales en el payload, la importación lanza `501`: todavía no está implementada.
+La transacción final hace upserts de daily_metrics, clarity_metrics o experiments/experiment_variants/variant_metrics. En Intelligems persiste metadata.confidence y la lista de ids vigentes, libera el control previo antes de reasignarlo y conserva métricas históricas. Conflictos únicos reemplazan la captura del mismo día sin duplicar. `recordsProcessed` cuenta cada experimento y cada métrica de variante, o cada fila diaria/snapshot Clarity.
+
+Finalmente marca integración connected y run completed, actualiza metadata.mock con la procedencia efectiva e inserta audit_events integration.synced con provider/recordsProcessed. Todo pertenece a la misma transacción: no se publica un éxito si falla una parte del SQL. Los DTO exponen sandbox sin publicar credencial, envelope ni metadata privada.
+
+Para evitar mezclar datos sintéticos y externos, la persistencia bloquea la fila de integración con FOR UPDATE. Si Shopify cambia metadata.mock respecto del payload, borra solo su caché source=shopify de esa tienda y la repuebla dentro de la transacción exitosa. En Intelligems/Clarity se conservan históricos y la lectura filtra metadata.mock según la última sync satisfactoria. Reconfigurar una credencial mantiene la procedencia de la caché previa hasta ese momento.
 
 Al fallar, otra transacción marca integración `error` y run `failed`, con diagnósticos sanitizados. Un fallo de persistencia revierte sus cambios. Un cierre abrupto entre las transacciones puede dejar un run `running`; no hay recuperación automática de jobs pendientes.
 

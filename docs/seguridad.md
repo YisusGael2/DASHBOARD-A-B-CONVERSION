@@ -8,8 +8,8 @@ La contraseña se guarda como hash Argon2id. Login utiliza un hash ficticio cuan
 
 | Rol | Capacidades HTTP actuales | No implementado por esa descripción |
 | --- | --- | --- |
-| CLIENT | Leer perfil, tienda propia, dashboard y metadata de integraciones | Escribir métricas, gestionar usuarios/tiendas o leer credenciales |
-| ADMIN | Leer todas las tiendas, crear tiendas/clientes, conectar y sincronizar | Crear empleados, elevarse a Super Admin, editar/eliminar cuentas mediante API |
+| CLIENT | Leer perfil, tienda propia, dashboard, metadata e historial de integraciones | Escribir métricas, gestionar usuarios/tiendas, leer credenciales o auditoría |
+| ADMIN | Leer todas las tiendas/auditoría, crear tiendas/clientes, conectar y sincronizar | Crear empleados, elevarse a Super Admin, editar/eliminar cuentas mediante API |
 | SUPER_ADMIN | Todo lo anterior y crear cuentas de los 3 roles | No implica una pantalla de configuración global ni editor de roles existente |
 
 La jerarquía no es herencia ilimitada automática: las rutas y RLS aplican condiciones concretas.
@@ -30,6 +30,8 @@ En Docker se separa bootstrap privilegiado y app limitado. En desarrollo con Nod
 
 Los adaptadores aceptan destinos fijos/canónicos, no siguen redirects y verifican TLS. Limitan tamaño y tiempo; sanitizan errores externos. El constructor `ProviderError` conserva códigos diagnósticos para pruebas/uso interno, pero el API devuelve mensaje y status.
 
+publicSyncRun no publica error arbitrario guardado en PostgreSQL: entrega diagnóstico genérico controlado. publicAuditEvent proyecta metadata mediante campos/tipos permitidos por acción. Los joins de actor usan solo correo público; nunca hash. La exportación CSV protege strings que podrían interpretarse como fórmulas y conserva valores numéricos negativos como números.
+
 El modo local usa HTTP en loopback. No es transporte apropiado para enviar credenciales por Internet; un despliegue público requiere HTTPS y una configuración de origen/sesión validada.
 
 ## Estado del navegador y cierre de sesión
@@ -44,25 +46,27 @@ DEMO_MODE controla la inserción del seed, los botones demo y la selección de f
 
 Guardar una credencial de cualquier proveedor mueve el dashboard entero de esa tienda a live; deja los ejemplos en DB. Un error real mantiene ese modo. Conectar no verifica que Clarity token corresponda al external_id introducido: esa correspondencia debe confirmarse externamente.
 
+Sandbox utiliza token mock_/sandbox_ o MOCK_PROVIDERS=true, después de las mismas validaciones. Cifra/descifra e importa por los mismos permisos y RLS; los DTO exponen flags sandbox sin credenciales. Connected con sandbox:true significa importación sintética satisfactoria, no validación de la cuenta externa. La procedencia de la caché solo cambia tras una sync exitosa; guardar otra credencial no acredita datos nuevos.
+
 ## Límites observados que deben guiar el siguiente desarrollo
 
 | Área | Comportamiento existente / trabajo pendiente |
 | --- | --- |
-| Integraciones | Shopify/Clarity requieren validación con cuentas y documentación vigente; Intelligems real501 |
+| Integraciones | Los tres adaptadores están implementados y requieren validación con cuentas/documentación vigente; Intelligems sigue el contrato solicitado |
 | Instalación Shopify | Token manual; OAuth, scopes comprobados, webhooks y revocación no implementados |
 | Usuarios | Crear/listar; sin edición, eliminación, invitación enviada, recuperación ni pantalla para desactivar |
-| Validación JSON | Parser y campos normales validados; cuerpos ausentes/null no se manejan uniformemente y pueden producir500 |
+| Validación JSON | Parser y campos normales validados; cuerpos ausentes/null no se manejan uniformemente y pueden producir 500 |
 | Contraseñas de alta | textValue recorta espacios externos; la contraseña resultante puede diferir de lo tecleado. Sin política más allá de longitud |
-| Auditoría | Solo user.created e integration.connected; no auditoría total ni UI de histórico |
+| Auditoría | Alta de usuario/tienda, configuración y sync exitosa; lectura/UI para empleados. No registra todas las operaciones |
 | Sincronización | Manual, síncrona; sin cola, cron, bloqueo de concurrencia o recuperación de runs running |
 | Reconfigurar integración | Puede conservar last_synced_at/resultados anteriores al reemplazar credencial; nueva lectura exitosa todavía debe comprobarse |
 | Roles en ejecución larga | Se resuelven al inicio de petición; una sync ya en curso no vuelve a consultar permisos entre fases |
-| Métricas | No compara cobertura igual de días, no filtra período/moneda/fuente en SUM de variantes; revenue no es utilidad |
+| Métricas | Variaciones exigen dos períodos completos; un período parcial muestra solo totales conocidos. Variantes usan último snapshot por fuente/moneda. La prueba z asume visitantes independientes/conversión binaria y no corrige múltiples comparaciones; revenue no es utilidad |
 | Precisión | BigInt en adaptador, numeric(18,2) en DB, Number en agregado/JSON y sin decimales en UI |
 | Estados | stores.paused no bloquea auth/sync; no lifecycle de tiendas implementado |
 | Timestamps | No trigger updated_at ni actualización consistente por handlers |
 | Migraciones | Esquema reinstalable actual, sin historial incremental versionado |
-| Escala | Pool10, limitador en memoria, GET/users500 sin paginación; una sola agencia |
-| Testing | 30 casos definidos, no una certificación completa ni pruebas de cuentas externas reales |
+| Escala | Pool 10, limitador en memoria, GET/users 500 sin paginación; una sola agencia |
+| Testing | Suites de proveedores, SQL/API, analítica/DTO y navegador; no una certificación completa ni pruebas de cuentas externas reales |
 
-Esta lista describe el código y separa futuras tareas de funcionalidades ya existentes. No se han modificado estas conductas como parte de la tarea de documentación.
+Esta lista describe la implementación actual y separa futuras tareas de funcionalidades existentes.

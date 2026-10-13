@@ -72,7 +72,7 @@ La usan listado, dashboard, alta de clientes, integraciones y RLS.
 | `status` | text requerido, disconnected | disconnected/demo/credential_saved/connected/error |
 | `external_id` | text nullable | Dominio, proyecto o cuenta externa |
 | `scopes` | text[] requerido, array vacío | Permisos declarados; los handlers actuales no los rellenan/verifican |
-| `metadata` | JSONB requerido, `{}` | Objeto no secreto; CHECK jsonb_typeof = object |
+| `metadata` | JSONB requerido, `{}` | Objeto no secreto; CHECK jsonb_typeof = object; mock identifica procedencia de la caché sincronizada |
 | `last_synced_at` | timestamptz nullable | Última sincronización exitosa; seed demo asigna now sintético |
 | `last_error` | text nullable | Diagnóstico sanitizado de fallo |
 | `created_at` | timestamptz requerido, now | Creación |
@@ -121,11 +121,11 @@ UNIQUE `(store_id,date,currency,source)` es el conflict target del importador. E
 | `started_at` | timestamptz nullable | Inicio |
 | `ended_at` | timestamptz nullable | Fin; no anterior a inicio cuando ambos existen |
 | `source` | text requerido, intelligems | demo/intelligems |
-| `metadata` | JSONB requerido, `{}` | Objeto; `confidence` puede leerse para presentar resultados |
+| `metadata` | JSONB requerido, `{}` | Objeto; confidence, mock y variantIds describen confianza, procedencia y variantes vigentes |
 | `created_at` | timestamptz requerido, now | Creación |
 | `updated_at` | timestamptz requerido, now | Actualización explícita |
 
-UNIQUE `(id,store_id)` y `(store_id,source,external_id)`. Un `external_id` null no evita duplicados de la misma manera que un identificador presente. Importación real pendiente.
+UNIQUE `(id,store_id)` y `(store_id,source,external_id)`. Un external_id null no evita duplicados de la misma manera que un identificador presente; el adaptador Intelligems exige uno válido antes del upsert. La importación persiste confianza y variantes vigentes en metadata y actualiza updated_at.
 
 ### `experiment_variants` — variante/control
 
@@ -157,7 +157,7 @@ FK `(experiment_id,store_id)` → experiments `(id,store_id)`, CASCADE. UNIQUE `
 | `created_at` | timestamptz requerido, now | Creación |
 | `updated_at` | timestamptz requerido, now | Actualización explícita |
 
-FK `(variant_id,store_id)` → experiment_variants `(id,store_id)`, CASCADE. UNIQUE `(variant_id,date,currency,source)`. No exige orders <= visitors: pedidos y visitantes no son intercambiables; un futuro adaptador debe definir su población y conversiones.
+FK `(variant_id,store_id)` → experiment_variants `(id,store_id)`, CASCADE. UNIQUE `(variant_id,date,currency,source)`. Intelligems guarda snapshots acumulados por fecha de captura; dashboard lee el último por variante/fuente/moneda sin sumarlos. No exige orders<=visitors en SQL; calculateZTest rechaza esos datos para no aplicar una prueba de conversiones binarias a conteos incompatibles.
 
 ### `clarity_metrics` — comportamiento de tienda
 
@@ -170,9 +170,9 @@ FK `(variant_id,store_id)` → experiment_variants `(id,store_id)`, CASCADE. UNI
 | `dead_clicks` | integer nullable | Conteo compatible; real actualmente null |
 | `rage_clicks` | integer nullable | Conteo compatible; real actualmente null |
 | `quick_backs` | integer nullable | Conteo compatible; real actualmente null |
-| `scroll_depth` | numeric(5,2) nullable | 0..100; adaptador lo conserva, API actual no lo muestra |
+| `scroll_depth` | numeric(5,2) nullable | 0..100; API lo publica como behavior.scrollDepth |
 | `source` | text requerido, clarity | demo/clarity |
-| `metadata` | JSONB requerido, `{}` | Objeto: aggregation, windowDays, snapshotDate, projectId y response |
+| `metadata` | JSONB requerido, `{}` | Objeto: aggregation, windowDays, snapshotDate, projectId, response real y mock cuando es Sandbox |
 | `created_at` | timestamptz requerido, now | Creación |
 | `updated_at` | timestamptz requerido, now | Actualización explícita |
 
@@ -191,7 +191,7 @@ UNIQUE `(store_id,date,source)` reemplaza el snapshot de esa fecha al repetir im
 | `error` | text nullable | Mensaje sanitizado |
 | `records_processed` | integer requerido, 0 | No negativo; filas persistidas |
 
-FK compuesta hacia api_integrations, CASCADE. No hay endpoint de consulta de runs ni worker que rescate ejecuciones running tras un cierre abrupto.
+FK compuesta hacia api_integrations, CASCADE. GET `/api/sync-runs` lee los últimos 25 de la tienda dentro de withContext/RLS; CLIENT solo accede a su tienda. No hay worker que rescate ejecuciones running tras un cierre abrupto.
 
 ### `audit_events` — auditoría parcial
 
@@ -200,11 +200,11 @@ FK compuesta hacia api_integrations, CASCADE. No hay endpoint de consulta de run
 | `id` | UUID PK generado | Evento |
 | `store_id` | UUID nullable | FK stores, RESTRICT; null para evento global |
 | `actor_user_id` | UUID nullable | FK users, SET NULL si se elimina actor |
-| `action` | text requerido | No vacío; hoy user.created / integration.connected |
+| `action` | text requerido | No vacío; user.created, store.created, integration.connected, integration.synced |
 | `metadata` | JSONB requerido, `{}` | Objeto: ids/rol/proveedor, sin secretos |
 | `created_at` | timestamptz requerido, now | Momento del evento |
 
-No se auditan todavía todas las operaciones. No hay endpoint/UI de auditoría. Runtime solo recibe SELECT e INSERT; no UPDATE/DELETE.
+GET `/api/audit-events` consulta los últimos 50, con filtro opcional de tienda, solo para empleados; TeamPage muestra la tabla. Metadata pública pasa por una proyección por acción, no se devuelve JSONB arbitrario. No se auditan todas las operaciones. Runtime solo recibe SELECT e INSERT; no UPDATE/DELETE.
 
 ## Índices explícitos y unicidad
 

@@ -13,6 +13,8 @@ Los cuerpos son JSON con `Content-Type: application/json`. Máximo global: 16 KB
 | `GET /api/auth/me` | No | Propio usuario | Propio usuario | Propio usuario |
 | `GET /api/stores` | No | Solo su tienda | Todas | Todas |
 | `GET /api/dashboard` | No | Su tienda | Tienda seleccionada | Tienda seleccionada |
+| `GET /api/sync-runs` | No | Su tienda | Tienda seleccionada | Tienda seleccionada |
+| `GET /api/audit-events` | No | Denegado | Todos o filtro de tienda | Todos o filtro de tienda |
 | `GET /api/users` | No | Denegado | Solo usuarios CLIENT | Todos, hasta 500 |
 | `POST /api/users` | No | Denegado | Solo crear CLIENT | Crear cualquiera de los 3 roles |
 | `POST /api/stores` | No | Denegado | Permitido | Permitido |
@@ -27,7 +29,9 @@ No existen PUT, PATCH ni DELETE de estas entidades. Tampoco existe un endpoint d
 | --- | --- |
 | `User` | `id:string(UUID)`, `name:string`, `email:string`, `role:CLIENT/ADMIN/SUPER_ADMIN`, `storeId:UUID/null`, `status:active/disabled` |
 | `Store` | `id:UUID`, `name:string`, `domain:string`, `currency:string(3)`, `timeZone:string`, `status:active/paused` |
-| `Integration` | `id:UUID`, `provider:shopify/clarity/intelligems`, `status:disconnected/demo/credential_saved/connected/error`, `lastSyncedAt:ISO timestamp/null`, `externalAccountId:string/null` |
+| `Integration` | `id:UUID`, `provider:shopify/clarity/intelligems`, `status:disconnected/demo/credential_saved/connected/error`, `lastSyncedAt:ISO timestamp/null`, `externalAccountId:string/null`, `sandbox:boolean` |
+| `SyncRun` | `id:UUID`, `integrationId:UUID`, `provider:string`, `status:running/completed/failed`, `startedAt:timestamp`, `finishedAt:timestamp/null`, `recordsProcessed:number`, `error:string/null` |
+| `AuditEvent` | `id:UUID`, `storeId:UUID/null`, `storeName:string/null`, `actorUserId:UUID/null`, `actorEmail:string/null`, `action:string`, `metadata:objeto filtrado`, `createdAt:timestamp` |
 
 No incluyen hash, ciphertext, token del proveedor ni clave API.
 
@@ -74,7 +78,7 @@ Sin parámetros. Éxito `200`: `{ "stores": [Store] }`, ordenado por nombre. La 
 
 `name`: obligatorio, hasta 160 caracteres. `domain`: obligatorio, hasta 253, normalizado a minúsculas; debe coincidir con patrón canónico `.myshopify.com`. `currency`: tres letras mayúsculas, default `USD`. `timeZone`: validada con `Intl.DateTimeFormat`, default `UTC`.
 
-Éxito `201`: `{ "store": Store }`; `status` comienza en `active`. No crea automáticamente usuarios, credenciales ni métricas. Dominio duplicado genera `409`. El validador del adaptador Shopify es más estricto en longitud de etiqueta que el del alta de tienda.
+Éxito `201`: `{ "store": Store }`; `status` comienza en `active`. Inserta el evento `store.created` con metadata `{domain,currency}` en la misma transacción. No crea automáticamente usuarios, credenciales ni métricas. Dominio duplicado genera `409`. El validador del adaptador Shopify es más estricto en longitud de etiqueta que el del alta de tienda.
 
 ### `GET /api/users`
 
@@ -98,9 +102,11 @@ Sin parámetros. Éxito `200`: `{ "stores": [Store] }`, ordenado por nombre. La 
 
 ## Dashboard
 
-### `GET /api/dashboard?storeId=<UUID>`
+### `GET /api/dashboard?storeId=<UUID>&days=14`
 
 CLIENT puede omitir `storeId`; se usa su tienda. Si envía otro id, recibe `403`. ADMIN/SUPER_ADMIN deben enviar un UUID; falta o formato incorrecto produce `400`. Tienda inexistente produce `404`.
+
+`days` es opcional, por defecto 14. Solo admite las cadenas `7`, `14` o `28`; otro valor recibe `400` con “El período debe ser de 7, 14 o 28 días.” Consulta dos ventanas consecutivas del tamaño elegido; `daily` y el resumen corresponden a la ventana actual. No cambia el período descargado por sync.
 
 Respuesta `200`:
 
@@ -110,9 +116,11 @@ Respuesta `200`:
   "summary": {"revenue":null,"orders":null,"conversionRate":null,"sessionCount":null,"revenueChange":null,"ordersChange":null,"conversionChange":null,"sessionChange":null},
   "daily": [],
   "experiments": [],
-  "behavior": {"sessions":null,"deadClicks":null,"rageClicks":null,"quickBacks":null,"source":"clarity","windowDays":null},
+  "behavior": {"sessions":null,"deadClicks":null,"rageClicks":null,"quickBacks":null,"scrollDepth":null,"source":"clarity","windowDays":null,"sandbox":false},
   "integrations": [],
   "mode":"live",
+  "periodDays":14,
+  "sandbox":false,
   "updatedAt":null
 }
 ```
@@ -125,17 +133,20 @@ Este ejemplo ilustra la estructura sin datos; no es la respuesta de la tienda de
 | `summary.orders` | Suma de pedidos actuales; entero/null |
 | `summary.sessionCount` | Suma solo si todas las filas del período tienen sesiones; entero/null |
 | `summary.conversionRate` | Pedidos/sesiones ×100, dos decimales; `2.8` significa 2.8%, no fracción 0.028 |
-| `*Change` | Cambio relativo ×100 frente al período anterior, un decimal; null si no puede calcularse |
-| `daily[]` | `{date:YYYY-MM-DD,revenue:number,orders:integer,sessions:integer/null}`; hasta 14 días presentes |
-| `experiments[]` | `{id,name,status,startedAt,visitors,confidence,variants}` |
-| `variants[]` | `{id,name,isControl,visitors,conversions,revenue,conversionRate}` |
-| `confidence` | Valor `metadata.confidence` del experimento; en demo es sintético. No calculado por el backend |
+| `*Change` | Cambio relativo ×100 frente al período anterior, un decimal; exige days filas en ambas ventanas y una base anterior positiva. Cobertura incompleta o dato ausente devuelve null |
+| `daily[]` | `{date:YYYY-MM-DD,revenue:number,orders:integer,sessions:integer/null}`; hasta `periodDays` fechas presentes |
+| `experiments[]` | `{id,name,status,startedAt,endedAt,visitors,confidence,confidenceSource,sandbox,variants}` |
+| `variants[]` | `{id,name,isControl,visitors,conversions,revenue,conversionRate}`; variantes no-control añaden `lift:number/null`, `calculatedConfidence:number/null` |
+| `confidence` | Confianza numérica compatible de metadata, o fallback calculado de la primera variante no-control; demo/Sandbox sintéticos. No representa probabilidad de ganador |
+| `confidenceSource` | `provider`, `calculated`, `demo`, `sandbox` o null |
 | `behavior` | Clarity general de la tienda; períodos distintos de ventas se explicitan con `windowDays` |
 | `integrations[]` | DTO públicos de integraciones existentes |
 | `mode` | Fuente elegida para el dashboard entero: `demo` o `live` |
+| `periodDays` | Ventana actual elegida: 7, 14 o 28 |
+| `sandbox` | Alguna integración tiene origen simulado; no significa que todas las fuentes sean sintéticas |
 | `updatedAt` | Mayor timestamp de sincronización registrado en integraciones, o null |
 
-El endpoint no acepta filtros de fecha ni calcula ganador A/B. Consulta [Backend](backend.md) para ver consultas y limitaciones de los agregados.
+Clarity live utiliza el último snapshot y expone su `windowDays`, normalmente 3, independiente de `days`. Demo suma comportamiento del período y promedia scroll. Intelligems lee el último snapshot acumulado de cada variante, sin sumar fechas ni limitar ese total a `days`. El endpoint no acepta fechas arbitrarias ni declara ganador A/B. Consulta [Backend](backend.md) para fórmulas y limitaciones.
 
 ## Integraciones
 
@@ -165,9 +176,25 @@ Credencial: texto obligatorio, hasta 4096 caracteres. Identificador externo: obl
 {"storeId":"<UUID>"}
 ```
 
-Éxito `200`: `{ "message":"Sincronización completada.", "recordsProcessed": 28, "warnings": [] }`. `recordsProcessed` cuenta filas persistidas, no pedidos descargados. Shopify pide 28 días; Clarity 3. No existe parámetro HTTP para cambiar esa ventana.
+Éxito `200`: `{ "message":"Sincronización completada.", "recordsProcessed":28, "sandbox":false, "warnings":[] }`. En Sandbox message indica “Sincronización Sandbox completada con datos simulados.” y sandbox es true. recordsProcessed cuenta filas persistidas, no pedidos descargados. Shopify pide 28 días; Clarity 3; Intelligems 28 para su contrato interno. Intelligems suma una fila por experimento y una por métrica de variante; dos pruebas con dos variantes cada una procesan 6. No existe parámetro HTTP para cambiar esa ventana.
 
-`409` si falta conexión, falta credencial o es integración demo. `501` para Intelligems real. Las fallas HTTPS, timeout, permisos o límites se traducen desde el adaptador y se registran sin secretos. La llamada es síncrona: no devuelve un job para consultar más tarde.
+`409` si falta conexión, falta credencial o es integración demo. Las fallas HTTPS, timeout, permisos o límites se traducen desde el adaptador y se registran sin secretos. Una sync completa registra `integration.synced` con `{provider,recordsProcessed}`. La llamada es síncrona: no devuelve un job para consultar más tarde.
+
+Una credencial `mock_<provider>_sandbox_token` o `sandbox_...`, o `MOCK_PROVIDERS=true`, recorre el mismo almacenamiento/descifrado/importación SQL con datos sintéticos y sin llamadas externas. La integración queda connected y conserva `sandbox:true`. El token siempre debe ser válido y no vacío.
+
+La procedencia pública refleja la caché de la última sync satisfactoria, incluso si después se guarda otra credencial. La transición exitosa Shopify Sandbox↔externo renueva su caché diaria; Intelligems/Clarity conservan históricos y filtran la procedencia actual. Consulta [Integraciones](integraciones.md) para ese tratamiento.
+
+## Historial y auditoría
+
+### `GET /api/sync-runs?storeId=<UUID>`
+
+Usa `storeIdFor` y `requireStore` dentro de `withContext`. CLIENT puede omitir tienda y solo consulta la propia; pedir otra produce 403. Staff debe indicar UUID válido. Retorna `200 {"syncRuns":[SyncRun]}` con las últimas 25 ejecuciones, orden descendente por started_at, unidas a la integración para obtener proveedor. Sin ejecuciones retorna arreglo vacío. `error` se proyecta a un diagnóstico genérico controlado o null; no devuelve error SQL, respuesta upstream ni texto arbitrario almacenado.
+
+### `GET /api/audit-events?storeId=<UUID>`
+
+Exige `requireStaff`: CLIENT recibe 403. El filtro de tienda es opcional y, si aparece, requiere UUID válido; sin filtro muestra eventos globales y de todas las tiendas. Retorna `200 {"auditEvents":[AuditEvent]}` con los últimos 50 eventos por created_at descendente. LEFT JOIN obtiene nombre de tienda y correo público del actor.
+
+Metadata pública se limita a campos y tipos conocidos por acción: user.created `{userId,role}`; store.created `{domain,currency}`; integration.connected `{provider}`; integration.synced `{provider,recordsProcessed}`. No se serializa metadata arbitraria. La auditoría es parcial; no registra lecturas/login ni sustituye un sistema de auditoría completa.
 
 ## Errores y respuestas especiales
 
@@ -184,7 +211,6 @@ Formato habitual: `{"error":"mensaje"}`. El API no devuelve el `code` interno de
 | `422` | Shopify supera límite de pedidos del adaptador |
 | `429` | Rate limit de login o proveedor |
 | `500` | Error interno inesperado o configuración de versión API no válida |
-| `501` | Sincronización real Intelligems/importación de experimentos pendiente |
 | `502` | Red, respuesta o disponibilidad del proveedor no compatible |
 | `504` | Tiempo máximo de proveedor/sync excedido |
 
