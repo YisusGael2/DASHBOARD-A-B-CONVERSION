@@ -6,7 +6,7 @@ Esta documentación describe la implementación del **Dashboard de Centralizaci�
 
 | Documento | Qué responde |
 | --- | --- |
-| [Pruebas locales](pruebas-locales.md) | Cómo abrirlo en tu equipo, qué probar con cada rol y cómo ejecutar las 28 pruebas |
+| [Pruebas locales](pruebas-locales.md) | Cómo abrirlo en tu equipo, qué probar con cada rol y cómo ejecutar las 30 pruebas |
 | [Arquitectura y archivos](arquitectura.md) | Cómo se conectan interfaz, API, PostgreSQL, Docker y proveedores; responsabilidad de cada archivo |
 | [Backend y funciones](backend.md) | Nombre, firma, mecanismo, dependencias y errores de cada función del servidor |
 | [Frontend y funciones](frontend.md) | Componentes, funciones internas, estado, efectos y conexión de cada pantalla con la API |

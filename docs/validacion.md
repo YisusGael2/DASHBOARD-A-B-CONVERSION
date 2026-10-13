@@ -1,8 +1,8 @@
 # Evidencia de validación de la documentación
 
-Código funcional de referencia: commit `e3d089d4842cc43475615afbfcf7e0a66748f7fa`. Esta actualización modifica documentación y corrige instrucciones del README; no cambia la lógica de la aplicación.
+La documentación inicial se elaboró sobre el código funcional del commit `e3d089d4842cc43475615afbfcf7e0a66748f7fa`. Las correcciones posteriores de interfaz y su validación se registran por separado abajo.
 
-## Comprobaciones ejecutadas
+## Comprobaciones de la documentación inicial
 
 | Comprobación | Resultado observado | Alcance |
 | --- | --- | --- |
@@ -26,3 +26,13 @@ Las pruebas se ejecutaron en el entorno de desarrollo de este repositorio, con l
 ## Reproducir
 
 Sigue [Pruebas locales](pruebas-locales.md). Los fixtures de integración y navegador son temporales; no ejecutes estas suites en una base de clientes reales. Verifica que una nueva ejecución complete todos los casos: un resultado anterior no garantiza un nuevo arranque, y una suite sin tests no valida el producto.
+
+## Corrección de flecha y cierre de sesión
+
+Se reprodujeron ambos problemas antes del cambio: la flecha recibía el clic como SVG sin activar select; el logout de Super Admin quedaba debajo del viewport, alrededor de y=795 en una ventana de 540 px. Los dos nuevos casos de regresión fallaron con el código anterior.
+
+La flecha ahora pertenece al control nativo y deja pasar el clic; el logout es un botón explícito de la cabecera sticky, y la barra lateral permite scroll. Se conserva la función de cierre local y la autorización existente.
+
+Validación posterior: **22 pruebas del backend/adaptadores y 8 de navegador pasaron**, además de compilación Vite y arranque Docker. Se comprobó clic físico en la flecha, cambio de tienda, cierre con un clic en el icono, eliminación de token y recarga sin sesión. La prueba móvil usa 390×540.
+
+El inventario actual se actualizó para el código corregido; las cifras de la tabla inicial corresponden a su revisión histórica. No se han realizado pruebas en el equipo del usuario ni conexiones nuevas con cuentas externas.

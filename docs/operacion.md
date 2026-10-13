@@ -16,7 +16,7 @@ Todos los comandos se ejecutan en la raíz `DASHBOARD-A-B-CONVERSION`, salvo ind
 | `npm run db:seed` | server/scripts/seed.js | Demo si habilitada; de otro modo termina sin crear muestras |
 | `npm run db:bootstrap` | server/scripts/bootstrap.js | Primer Super Admin sin demo |
 | `npm test` | node --test test/*.test.js providers/*.test.js en server | 10 casos de integración y 12 de adaptadores |
-| `npm run test:e2e` | playwright test | 6 flujos de navegador |
+| `npm run test:e2e` | playwright test | 8 flujos de navegador |
 
 En el workspace cliente existen además `dev`, `build` y `preview`; preview sirve únicamente el compilado y no configura el proxy API de desarrollo. No es el comando principal para probar el producto completo. Los comandos del workspace servidor son dev/start/db:migrate/db:seed/db:bootstrap/test.
 

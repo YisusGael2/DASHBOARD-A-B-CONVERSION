@@ -4,7 +4,7 @@ Dashboard para **una sola agencia e-commerce** y sus clientes Shopify. Centraliz
 
 ## Documentación completa
 
-Consulta el [índice de documentación](docs/README.md) para arquitectura, funciones, componentes, API, esquema SQL, integraciones, seguridad, operación y el inventario de callbacks. Para empezar en tu equipo, sigue la [guía de pruebas locales](docs/pruebas-locales.md), con el recorrido por roles y las 28 pruebas automáticas.
+Consulta el [índice de documentación](docs/README.md) para arquitectura, funciones, componentes, API, esquema SQL, integraciones, seguridad, operación y el inventario de callbacks. Para empezar en tu equipo, sigue la [guía de pruebas locales](docs/pruebas-locales.md), con el recorrido por roles y las 30 pruebas automáticas.
 
 ## Abrir en local
 

@@ -134,6 +134,10 @@ El input de dominio tiene pattern canónico; backend también lo valida. El sele
 
 Los callbacks JSX abren/cerran menú y modal, cambian tienda, incrementan contadores de reintento, limpian notificación o cierran sesión. `visiblePages` elimina Equipo para CLIENT; el selector de tiendas se sustituye por texto para ese rol. El ocultamiento visual complementa autorización del API; no la reemplaza.
 
+Para empleados, el select nativo y su flecha viven juntos en `store-select-control`. La flecha tiene `pointer-events:none`, por lo que el clic atraviesa el dibujo y llega al select, incluida su zona de padding. Se conserva la navegación por teclado del control nativo.
+
+El botón explícito **Cerrar sesión** está en la cabecera sticky y llama directamente a `onLogout` (`App.logout`). El perfil de la barra lateral muestra identidad y rol, sin ser un botón oculto de logout. La barra lateral tiene scroll y sus hijos no se comprimen: las ventanas de poca altura no dejan acciones fuera de alcance.
+
 `store` se busca en la lista; `period` proviene de las fechas presentes en `data.daily`, no de un calendario editable. La selección de vistas y la tienda no se guardan en URL ni localStorage.
 
 ## `App()` y sesión

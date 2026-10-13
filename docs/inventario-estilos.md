@@ -14,6 +14,7 @@ Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra un
 | <code>@media</code> | <code>(max-width:720px)</code> | [L22](../client/src/styles.css#L22) |
 | <code>@media</code> | <code>(max-width:380px)</code> | [L23](../client/src/styles.css#L23) |
 | <code>@media</code> | <code>(prefers-reduced-motion:reduce)</code> | [L25](../client/src/styles.css#L25) |
+| <code>@media</code> | <code>(max-width:720px)</code> | [L39](../client/src/styles.css#L39) |
 
 ## Selectores y declaraciones
 
@@ -148,8 +149,6 @@ Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra un
 | [<code>.user-profile&gt;div</code>](../client/src/styles.css#L10) | <code>General</code> | <code>flex: 1; min-width: 0</code> |
 | [<code>.user-profile strong</code>](../client/src/styles.css#L10) | <code>General</code> | <code>display: block; font-size: 10px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap</code> |
 | [<code>.user-profile small</code>](../client/src/styles.css#L10) | <code>General</code> | <code>display: block; color: #809f8d; font-size: 9px; margin-top: 4px</code> |
-| [<code>.user-profile&gt;svg</code>](../client/src/styles.css#L10) | <code>General</code> | <code>color: #749180</code> |
-| [<code>.user-profile:hover&gt;svg</code>](../client/src/styles.css#L10) | <code>General</code> | <code>color: #c2ddcb</code> |
 | [<code>.workspace-body</code>](../client/src/styles.css#L10) | <code>General</code> | <code>margin-left: 234px; width: calc(100% - 234px); min-width: 0</code> |
 | [<code>.topbar</code>](../client/src/styles.css#L10) | <code>General</code> | <code>height: 69px; border-bottom: 1px solid var(--line); background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 36px</code> |
 | [<code>.topbar-left,.topbar-right</code>](../client/src/styles.css#L10) | <code>General</code> | <code>display: flex; align-items: center; gap: 14px</code> |
@@ -173,7 +172,6 @@ Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra un
 | [<code>.store-picker strong</code>](../client/src/styles.css#L10) | <code>General</code> | <code>font-size: 11px; font-weight: 600</code> |
 | [<code>.store-picker label</code>](../client/src/styles.css#L10) | <code>General</code> | <code>flex: 1</code> |
 | [<code>.store-picker select</code>](../client/src/styles.css#L10) | <code>General</code> | <code>width: 100%; padding: 0 16px 0 0; border: 0; border-radius: 0; min-height: unset; appearance: none; font-size: 11px; cursor: pointer; font-weight: 550</code> |
-| [<code>.store-picker&gt;svg</code>](../client/src/styles.css#L10) | <code>General</code> | <code>color: #90a18b</code> |
 | [<code>.overview-toolbar</code>](../client/src/styles.css#L10) | <code>General</code> | <code>display: flex; align-items: center; justify-content: space-between; padding-bottom: 19px; gap: 12px</code> |
 | [<code>.store-domain</code>](../client/src/styles.css#L10) | <code>General</code> | <code>display: flex; align-items: center; gap: 6px; font-size: 10px; color: #8a9b8d</code> |
 | [<code>.store-domain .live-dot</code>](../client/src/styles.css#L10) | <code>General</code> | <code>background: #78a97a; width: 4px; height: 4px</code> |
@@ -416,7 +414,6 @@ Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra un
 | [<code>.store-picker label</code>](../client/src/styles.css#L22) | <code>@media (max-width:720px)</code> | <code>max-width: unset</code> |
 | [<code>.store-picker small</code>](../client/src/styles.css#L22) | <code>@media (max-width:720px)</code> | <code>font-size: 7px</code> |
 | [<code>.store-picker select,.store-picker strong</code>](../client/src/styles.css#L22) | <code>@media (max-width:720px)</code> | <code>font-size: 11px</code> |
-| [<code>.store-picker&gt;svg</code>](../client/src/styles.css#L22) | <code>@media (max-width:720px)</code> | <code>margin-left: auto</code> |
 | [<code>.overview-toolbar</code>](../client/src/styles.css#L22) | <code>@media (max-width:720px)</code> | <code>padding-bottom: 16px</code> |
 | [<code>.date-range</code>](../client/src/styles.css#L22) | <code>@media (max-width:720px)</code> | <code>font-size: 9px; gap: 5px</code> |
 | [<code>.date-caption</code>](../client/src/styles.css#L22) | <code>@media (max-width:720px)</code> | <code>font-size: 8px; padding-right: 0</code> |
@@ -492,5 +489,19 @@ Fuente: [client/src/styles.css](../client/src/styles.css). Cada fila registra un
 | [<code>.revenue-definition</code>](../client/src/styles.css#L24) | <code>General</code> | <code>font-size: 8px; color: #a5b198; line-height: 1.7; padding: 0 24px 16px</code> |
 | [<code>.integration-card&gt;.integration-limit</code>](../client/src/styles.css#L24) | <code>General</code> | <code>font-size: 8px; line-height: 1.7; color: #b09672; background: #fffaf1; border: 1px solid #f1e7d3; border-radius: 5px; padding: 9px; min-height: unset; margin: 0 0 15px; grid-column: 1/-1</code> |
 | [<code>&#42;,&#42;::before,&#42;::after</code>](../client/src/styles.css#L25) | <code>@media (prefers-reduced-motion:reduce)</code> | <code>animation-duration: .01ms !important; transition-duration: .01ms !important</code> |
+| [<code>.sidebar</code>](../client/src/styles.css#L28) | <code>General</code> | <code>overflow-y: auto</code> |
+| [<code>.sidebar&gt;&#42;</code>](../client/src/styles.css#L29) | <code>General</code> | <code>flex-shrink: 0</code> |
+| [<code>.topbar</code>](../client/src/styles.css#L30) | <code>General</code> | <code>position: sticky; top: 0; z-index: 20</code> |
+| [<code>.topbar-left</code>](../client/src/styles.css#L31) | <code>General</code> | <code>min-width: 0</code> |
+| [<code>.topbar-right</code>](../client/src/styles.css#L32) | <code>General</code> | <code>flex-shrink: 0</code> |
+| [<code>.store-picker label</code>](../client/src/styles.css#L33) | <code>General</code> | <code>min-width: 0; max-width: none</code> |
+| [<code>.store-select-control</code>](../client/src/styles.css#L34) | <code>General</code> | <code>display: block; position: relative</code> |
+| [<code>.store-select-control select</code>](../client/src/styles.css#L35) | <code>General</code> | <code>display: block; min-height: 24px; padding: 2px 26px 2px 0; line-height: 20px</code> |
+| [<code>.store-select-control&gt;svg</code>](../client/src/styles.css#L36) | <code>General</code> | <code>position: absolute; right: 2px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #90a18b</code> |
+| [<code>.session-button</code>](../client/src/styles.css#L37) | <code>General</code> | <code>display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 11px; border: 1px solid #dce7df; border-radius: 7px; background: #f3f7f4; color: #386a55; font-size: 11px; font-weight: 600; white-space: nowrap</code> |
+| [<code>.session-button:hover</code>](../client/src/styles.css#L38) | <code>General</code> | <code>background: #e8f1eb; color: #214c3b</code> |
+| [<code>.topbar-avatar</code>](../client/src/styles.css#L39) | <code>@media (max-width:720px)</code> | <code>display: none</code> |
+| [<code>.session-button</code>](../client/src/styles.css#L39) | <code>@media (max-width:720px)</code> | <code>padding: 8px; font-size: 10px; gap: 6px</code> |
+| [<code>.breadcrumb</code>](../client/src/styles.css#L39) | <code>@media (max-width:720px)</code> | <code>min-width: 0; overflow: hidden; white-space: nowrap</code> |
 
-Total: **473 reglas de selectores**, incluidos overrides responsive y pasos de animación. Los valores CSS no representan métricas de negocio.
+Total: **483 reglas de selectores**, incluidos overrides responsive y pasos de animación. Los valores CSS no representan métricas de negocio.

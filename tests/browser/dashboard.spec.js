@@ -73,6 +73,40 @@ test('admin cambia de tienda y solo puede crear clientes', async ({ page }) => {
   await expect(dialog).toHaveCount(0);
 });
 
+test('selector de tienda responde al clic sobre la flecha', async ({ page }) => {
+  await signIn(page, 'admin@demo.local');
+  const picker = page.getByRole('combobox', { name: 'Seleccionar tienda' });
+  await picker.selectOption(storeB);
+  const arrow = await page.locator('.store-picker svg').last().boundingBox();
+  expect(arrow).not.toBeNull();
+  const point = { x: arrow.x + arrow.width / 2, y: arrow.y + arrow.height / 2 };
+  const targetIndex = await picker.evaluate((select, target) => [...select.options].findIndex(option => option.value === target), storeA);
+  expect(targetIndex).toBeGreaterThanOrEqual(0);
+  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName, point)).toBe('SELECT');
+  await page.mouse.click(point.x, point.y);
+  await expect(picker).toBeFocused();
+  await page.keyboard.press('Home');
+  for (let index = 0; index < targetIndex; index++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveValue(storeA);
+  await expect(page.locator('.store-domain')).toContainText('demo-nomada-studio.myshopify.com');
+});
+
+test('cerrar sesión queda accesible en ventanas de poca altura', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 540 });
+  await signIn(page, 'super@demo.local');
+  const logout = page.getByTitle('Cerrar sesión');
+  const bounds = await logout.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(540);
+  await logout.locator('svg').click();
+  await expect(page.getByRole('button', { name: 'Entrar al dashboard' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('centraliza_token'))).toBeNull();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Entrar al dashboard' })).toBeVisible();
+});
+
 test('super admin ve empleados y los tres roles disponibles', async ({ page }) => {
   await signIn(page, 'super@demo.local');
   await nav(page, 'Equipo y accesos').click();
@@ -86,7 +120,7 @@ test('super admin ve empleados y los tres roles disponibles', async ({ page }) =
 });
 
 test('dashboard y navegación funcionan en móvil', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 390, height: 540 });
   await signIn(page, 'otro@demo.local');
   await expect(page.locator('.store-picker')).toContainText('Casa Botánica');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
@@ -94,6 +128,8 @@ test('dashboard y navegación funcionan en móvil', async ({ page }) => {
   await nav(page, 'Pruebas A/B').click();
   await expect(page.getByRole('heading', { name: 'Cada prueba, un aprendizaje.' })).toBeVisible();
   await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar-open/);
+  await page.getByTitle('Cerrar sesión').click();
+  await expect(page.getByRole('button', { name: 'Entrar al dashboard' })).toBeVisible();
 });
 
 test('crear tienda y guardar integración no inventa métricas ni conexión verificada', async ({ page }) => {

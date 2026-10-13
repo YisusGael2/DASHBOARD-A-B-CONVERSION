@@ -79,7 +79,7 @@ flowchart TD
 | `server/providers/README.md` | Compatibilidad y significado de adaptadores | Código de proveedores y referencia detallada |
 | `server/test/integration.test.js` | 10 casos de autenticación, API y RLS con DB real | `createApp`, pools, JWT y cifrado |
 | `server/providers/providers.test.js` | 12 casos con respuestas externas simuladas | `syncProvider`, `ProviderError`, `fetch` sustituido |
-| `tests/browser/dashboard.spec.js` | 6 flujos completos de interfaz y permisos | Playwright, API, DB para limpiar fixtures |
+| `tests/browser/dashboard.spec.js` | 8 flujos completos de interfaz y permisos | Playwright, API, DB para limpiar fixtures |
 | `playwright.config.js` | Navegador, URL, servidor, reintentos y trazas | Suite de navegador y servidor compilado |
 | `docs/*.md` | Referencia funcional y operativa del código propio | Todos los archivos anteriores |
 

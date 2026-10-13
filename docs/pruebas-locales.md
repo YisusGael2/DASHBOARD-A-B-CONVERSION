@@ -50,7 +50,9 @@ Las pantallas deben indicar DEMO. Los importes y resultados son ficticios. La se
 6. **Nueva tienda:** como empleado usa Añadir tienda, un dominio de prueba canónico como prueba-local-agencia.myshopify.com, moneda y zona. Debe aparecer vacía, con valores “No disponible”; crear tienda no importa datos ni contacta Shopify.
 7. **Nuevo cliente:** crea un acceso CLIENT asignado a esa tienda con correo de prueba único y contraseña elegida localmente; entra con esa cuenta y comprueba que solo ve esa tienda vacía. Es una creación real en tu DB local, no se envía una invitación por correo.
 8. **Móvil:** abre herramientas de desarrollador y viewport de 390 px. El menú debe abrir/cerrar y las pantallas no deben exigir scroll horizontal global. Revisa modales con Tab, Shift+Tab y Escape.
-9. **Sesión:** recarga página para restaurarla; cierra sesión para eliminar token del navegador. La vista vuelve a Resumen al recargar. Logout no revoca un token ya copiado; esa función de servidor está pendiente.
+9. **Sesión:** recarga página para restaurarla; pulsa **Cerrar sesión** en la cabecera para eliminar token del navegador. Debe volver al login con un solo clic, también en una ventana baja. La vista vuelve a Resumen al recargar. Logout no revoca un token ya copiado; esa función de servidor está pendiente.
+
+Al cambiar de tienda, comprueba que la lista se abra al pulsar la **flecha**, además del nombre; el control sigue permitiendo usar teclado.
 
 No introduzcas credenciales reales únicamente para recorrer la demo. Guardar cualquier credencial cambia toda esa tienda a fuente live y oculta sus muestras. Usa la nueva tienda de prueba para configurar integraciones sin cambiar Nómada/Casa Botánica.
 
@@ -106,7 +108,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Resultado esperado: **6 passed**. El navegador es headless, por lo que no necesariamente verás una ventana. Para verlo durante la prueba:
+Resultado esperado: **8 passed**. El navegador es headless, por lo que no necesariamente verás una ventana. Para verlo durante la prueba:
 
 ```bash
 npm run test:e2e -- --headed
@@ -163,8 +165,10 @@ Playwright usa por defecto 8080. Si no hay servidor, intenta iniciar npm start c
 | Login inválido | Error visible y sin navegación privada |
 | Cliente | Tienda propia, API403 otra, tabs, persistencia y logout |
 | Admin | Cambio de tienda y formulario con solo rol CLIENT |
+| Flecha del selector | Clic en el dibujo alcanza el select nativo; abre el control, cambia opción y carga la tienda |
+| Logout en ventana baja | Botón dentro de viewport 1280×540; clic en icono cierra, elimina token y no restaura sesión al recargar |
 | Super Admin | Empleados visibles y formulario con 3 roles |
-| Móvil | 390×844, menú funcional y ancho sin desbordamiento global |
+| Móvil | 390×540, menú funcional, ancho sin desbordamiento global y logout accesible |
 | Nueva tienda/conexión | Alta por UI; cuatro valores no disponibles; credencial guardada no equivale a sincronización |
 
 ## 8. Funciones auxiliares de pruebas

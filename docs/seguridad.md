@@ -63,6 +63,6 @@ Guardar una credencial de cualquier proveedor mueve el dashboard entero de esa t
 | Timestamps | No trigger updated_at ni actualización consistente por handlers |
 | Migraciones | Esquema reinstalable actual, sin historial incremental versionado |
 | Escala | Pool10, limitador en memoria, GET/users500 sin paginación; una sola agencia |
-| Testing | 28 casos definidos, no una certificación completa ni pruebas de cuentas externas reales |
+| Testing | 30 casos definidos, no una certificación completa ni pruebas de cuentas externas reales |
 
 Esta lista describe el código y separa futuras tareas de funcionalidades ya existentes. No se han modificado estas conductas como parte de la tarea de documentación.
